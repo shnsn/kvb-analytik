@@ -1444,11 +1444,10 @@ function parseHW0021(text) {
 }
 
 function parseHW0024(text) {
-  // Zeilen-basierte Extraktion: extractPdfTextRowAware hat uns bereits Zeilen per Y-Koordinate gruppiert.
-  // Innerhalb einer Zeile Whitespace normalisieren, aber die Zeilentrennung ERHALTEN.
-  const lines = text.split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(l => l);
-  const norm  = lines.join(' ');
-
+  // Zeilen behalten wir für die "Summe kurativ"-Erkennung (Fallback),
+  // aber primär arbeiten wir auf dem collapse-normalisierten Text — das ist robust gegen
+  // pdf.js-Zeilenumbrüche, wenn ein Label umbricht ("Ber. u. Betr." + "Grundleistungen").
+  const norm = text.replace(/\s+/g, " ");
   const quarter = hfQuarter(norm);
   const bsnr    = hfBsnr(norm);
   const datum   = hfDatum(norm);
@@ -1456,7 +1455,7 @@ function parseHW0024(text) {
   const knownLabels = [
     { code: "01", label: "Grundleistungen" },
     { code: "02", label: "Besuche/Visiten" },
-    { code: "03", label: "Ber. u. Betr. Grundleistungen", aliases: ["Ber. u. Betreuungs"] },
+    { code: "03", label: "Ber. u. Betr. Grundleistungen", aliases: ["Ber. u. Betr.", "Ber. u. Betreuungs"] },
     { code: "04", label: "Allgemeine Leistungen" },
     { code: "08", label: "Sonderleistungen" },
     { code: "09", label: "Phys.-med. Leistungen" },
@@ -1470,44 +1469,73 @@ function parseHW0024(text) {
     { code: "06", label: "Früherkennung" },
     { code: "07", label: "Sonstige Hilfen" },
   ];
-  const numRe = /-?[\d.]+,\d{2}/g;
+  const allLabelStrs = knownLabels.flatMap(d => [d.label, ...(d.aliases || [])]);
+  const stopMarkers  = ["Summe kurativ", "inkl. Wirtschaftlichkeit", "Programmversion", "Prüfungsstelle"];
 
   const lstgr = [];
+  const seenCodes = new Set();
   for (const def of knownLabels) {
+    if (seenCodes.has(def.code)) continue;
     const labels = [def.label, ...(def.aliases || [])];
-    // Zeile finden, die (a) das Label enthält UND (b) mindestens eine deutsche Dezimalzahl —
-    // sonst wäre es die reine Code-Zeile ohne Werte.
-    const dataLine = lines.find(l =>
-      labels.some(lbl => l.includes(lbl)) && numRe.test(l) && (numRe.lastIndex = 0, true)
-    );
-    if (!dataLine) continue;
+    // Frühesten Auftreten irgendeines unserer Label suchen
+    let matchedLbl = null, idx = -1;
+    for (const lbl of labels) {
+      const p = norm.indexOf(lbl);
+      if (p >= 0 && (idx < 0 || p < idx)) { matchedLbl = lbl; idx = p; }
+    }
+    if (idx < 0) continue;
 
-    const nums = [...dataLine.matchAll(numRe)].map(m => parseGerNum(m[0]));
-    // Row-Layout: AG1..AG4 (0-4 Werte, können leer sein), Gesamt, ∅Praxis, ∅PG, ∅PGgew, AbwEuro, AbwProz.
-    // Die letzten 6 Werte sind IMMER Gesamt + 3 Durchschnittswerte + 2 Abweichungswerte.
+    const startPos = idx + matchedLbl.length;
+    const rest = norm.slice(startPos);
+
+    // Fenster bis zum nächsten Label / Stop-Marker begrenzen
+    let endPos = rest.length;
+    for (const other of allLabelStrs) {
+      if (other === matchedLbl) continue;
+      // Substring-Konflikte skippen: "Grundleistungen" ist Teil von "Ber. u. Betr. Grundleistungen"
+      if (matchedLbl.includes(other)) continue;
+      const p = rest.indexOf(other);
+      if (p >= 0 && p < endPos) endPos = p;
+    }
+    for (const marker of stopMarkers) {
+      const p = rest.indexOf(marker);
+      if (p >= 0 && p < endPos) endPos = p;
+    }
+
+    const window = rest.slice(0, endPos);
+    const nums = [...window.matchAll(/-?[\d.]+,\d{2}/g)].map(m => parseGerNum(m[0]));
+    // Layout: AG1..AG4 (0-4 Werte, oft leer) + Gesamt + ∅Praxis + ∅PG + ∅PGgew + AbwEUR + AbwProz.
+    // Also mindestens 6 Zahlen für eine gültige Zeile.
     if (nums.length < 6) continue;
-    const tail = nums.slice(-6);
-    const [gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz] = tail;
+    const [gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz] = nums.slice(-6);
 
-    // Plausibilität: Gesamt muss deutlich größer als €/Fall sein (Aggregat vs. Durchschnitt).
-    if (gesamt < praxisProFall * 10) continue;
-    // Plausibilität: Prozentabweichung realistisch (KVB-Werte liegen praktisch immer < 500 %).
+    // Plausibilitätsnetze
     if (!isFinite(abwProz) || Math.abs(abwProz) > 500) continue;
+    if (gesamt < praxisProFall * 10) continue;
+    // pgProFall und pggewProFall sollten in derselben Größenordnung liegen
+    if (pgProFall <= 0 || pggewProFall <= 0) continue;
 
     lstgr.push({
       code: def.code, bezeichnung: HF_LSTGR[def.code] || def.label,
       gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz,
     });
+    seenCodes.add(def.code);
   }
 
-  // "Summe kurativ (4)"-Zeile eigenständig parsen
+  // "Summe kurativ (N)"-Zeile: eigene Suche mit begrenztem Fenster
   let summeKurativ = null;
-  const kLine = lines.find(l => /Summe\s+kurativ/i.test(l) && numRe.test(l) && (numRe.lastIndex = 0, true));
-  if (kLine) {
-    const nums = [...kLine.matchAll(numRe)].map(m => parseGerNum(m[0]));
+  const kIdx = norm.search(/Summe\s+kurativ\s*\(\d\)/);
+  if (kIdx >= 0) {
+    const kRest = norm.slice(kIdx);
+    let endPos = kRest.length;
+    ["inkl. Wirtschaftlichkeit", "Sonstige Hilfen", "Summe kurativ + Sonstige"].forEach(m => {
+      const p = kRest.indexOf(m, 20); // ab Position 20 suchen, damit "Summe kurativ" selbst nicht als Grenze zählt
+      if (p >= 0 && p < endPos) endPos = p;
+    });
+    const nums = [...kRest.slice(0, endPos).matchAll(/-?[\d.]+,\d{2}/g)].map(m => parseGerNum(m[0]));
     if (nums.length >= 6) {
       const [gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz] = nums.slice(-6);
-      if (gesamt >= praxisProFall * 10 && Math.abs(abwProz) < 500) {
+      if (isFinite(abwProz) && Math.abs(abwProz) < 500 && gesamt >= praxisProFall * 10) {
         summeKurativ = { gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz };
       }
     }
