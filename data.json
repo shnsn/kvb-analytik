@@ -3091,9 +3091,110 @@
       "quarter": "2025-Q2",
       "bsnr": "638033000",
       "datum": "14.10.2025",
-      "lstgr": [],
+      "lstgr": [
+        {
+          "code": "01",
+          "bezeichnung": "Grundleistungen",
+          "gesamt": 4950.05,
+          "praxisProFall": 1.27,
+          "pgProFall": 3.18,
+          "pggewProFall": 2.03,
+          "abwEur": -0.76,
+          "abwProz": -37.59
+        },
+        {
+          "code": "02",
+          "bezeichnung": "Besuche/Visiten",
+          "gesamt": 60754.55,
+          "praxisProFall": 15.57,
+          "pgProFall": 9.57,
+          "pggewProFall": 9.25,
+          "abwEur": 6.32,
+          "abwProz": 68.29
+        },
+        {
+          "code": "03",
+          "bezeichnung": "Beratungs- und Betreuungsgrundleistungen",
+          "gesamt": 3421.59,
+          "praxisProFall": 0.88,
+          "pgProFall": 0.99,
+          "pggewProFall": 0.98,
+          "abwEur": -0.1,
+          "abwProz": -10.2
+        },
+        {
+          "code": "04",
+          "bezeichnung": "Allgemeine Leistungen",
+          "gesamt": 31802.7,
+          "praxisProFall": 8.15,
+          "pgProFall": 7.55,
+          "pggewProFall": 7.38,
+          "abwEur": 0.77,
+          "abwProz": 10.5
+        },
+        {
+          "code": "13",
+          "bezeichnung": "OP-/Narkose-/Überwach.-L.",
+          "gesamt": 310475.36,
+          "praxisProFall": 79.59,
+          "pgProFall": 75.1,
+          "pggewProFall": 69.67,
+          "abwEur": 9.92,
+          "abwProz": 14.23
+        },
+        {
+          "code": "10",
+          "bezeichnung": "Basis-Labor",
+          "gesamt": 378,
+          "praxisProFall": 0.1,
+          "pgProFall": 0.03,
+          "pggewProFall": 0.03,
+          "abwEur": 0.07,
+          "abwProz": 272.02
+        },
+        {
+          "code": "11",
+          "bezeichnung": "Spezial-Labor",
+          "gesamt": 30013.18,
+          "praxisProFall": 7.69,
+          "pgProFall": 8.01,
+          "pggewProFall": 7.24,
+          "abwEur": 0.45,
+          "abwProz": 6.23
+        },
+        {
+          "code": "14",
+          "bezeichnung": "Kosten/Pauschalerstattungen",
+          "gesamt": 5059.45,
+          "praxisProFall": 13.49,
+          "pgProFall": 12.84,
+          "pggewProFall": 12.85,
+          "abwEur": 0.65,
+          "abwProz": 5.03
+        },
+        {
+          "code": "05",
+          "bezeichnung": "Mutterschaftsvorsorge",
+          "gesamt": 17074.39,
+          "praxisProFall": 44.81,
+          "pgProFall": 47.28,
+          "pggewProFall": 46.95,
+          "abwEur": -2.13,
+          "abwProz": -4.55
+        },
+        {
+          "code": "07",
+          "bezeichnung": "Sonstige Hilfen",
+          "gesamt": 310475.36,
+          "praxisProFall": 79.59,
+          "pgProFall": 75.1,
+          "pggewProFall": 69.68,
+          "abwEur": 9.91,
+          "abwProz": 14.22
+        }
+      ],
       "summeKurativ": null,
-      "parsedAt": "2026-07-07T21:54:04.706Z"
+      "parsedAt": "2026-07-07T21:54:31.769Z"
     },
     {
       "type": "HW0021",
@@ -4558,7 +4659,7 @@
         "gesamtbetrag": 310475.36,
         "euroProFall": 79.59
       },
-      "parsedAt": "2026-07-07T21:54:04.822Z"
+      "parsedAt": "2026-07-07T21:54:31.898Z"
     },
     {
       "type": "HW0024",
@@ -4570,5 +4671,5 @@
       "parsedAt": "2026-07-07T21:46:01.439Z"
     }
   ],
-  "updatedAt": "2026-07-07T21:54:06.342Z"
+  "updatedAt": "2026-07-07T21:54:33.219Z"
 }
