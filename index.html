@@ -1444,50 +1444,73 @@ function parseHW0021(text) {
 }
 
 function parseHW0024(text) {
-  const norm = text.replace(/\s+/g, " ");
+  // Zeilen-basierte Extraktion: extractPdfTextRowAware hat uns bereits Zeilen per Y-Koordinate gruppiert.
+  // Innerhalb einer Zeile Whitespace normalisieren, aber die Zeilentrennung ERHALTEN.
+  const lines = text.split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim()).filter(l => l);
+  const norm  = lines.join(' ');
+
   const quarter = hfQuarter(norm);
-  const bsnr = hfBsnr(norm);
-  const datum = hfDatum(norm);
+  const bsnr    = hfBsnr(norm);
+  const datum   = hfDatum(norm);
 
   const knownLabels = [
-    { code: "01", label: "Grundleistungen" }, { code: "02", label: "Besuche/Visiten" },
+    { code: "01", label: "Grundleistungen" },
+    { code: "02", label: "Besuche/Visiten" },
     { code: "03", label: "Ber. u. Betr. Grundleistungen", aliases: ["Ber. u. Betreuungs"] },
-    { code: "04", label: "Allgemeine Leistungen" }, { code: "08", label: "Sonderleistungen" },
-    { code: "09", label: "Phys.-med. Leistungen" }, { code: "12", label: "Bildgebende Verfahren u.ä." },
+    { code: "04", label: "Allgemeine Leistungen" },
+    { code: "08", label: "Sonderleistungen" },
+    { code: "09", label: "Phys.-med. Leistungen" },
+    { code: "12", label: "Bildgebende Verfahren u.ä." },
     { code: "13", label: "OP-/Narkose-/Überwach.-L." },
-    { code: "10", label: "Gesamt Basis-Labor" }, { code: "11", label: "Gesamt Spezial-Labor" },
-    { code: "14", label: "Kosten/Pauschalerstattungen" }, { code: "15", label: "Impfungen" },
-    { code: "05", label: "Mutterschaftsvorsorge" }, { code: "06", label: "Früherkennung" },
+    { code: "10", label: "Gesamt Basis-Labor" },
+    { code: "11", label: "Gesamt Spezial-Labor" },
+    { code: "14", label: "Kosten/Pauschalerstattungen" },
+    { code: "15", label: "Impfungen" },
+    { code: "05", label: "Mutterschaftsvorsorge" },
+    { code: "06", label: "Früherkennung" },
     { code: "07", label: "Sonstige Hilfen" },
   ];
+  const numRe = /-?[\d.]+,\d{2}/g;
 
   const lstgr = [];
   for (const def of knownLabels) {
     const labels = [def.label, ...(def.aliases || [])];
-    let idx = -1;
-    for (const lbl of labels) { idx = norm.indexOf(lbl); if (idx >= 0) break; }
-    if (idx < 0) continue;
-    const window = norm.slice(idx, idx + 350);
-    const nums = [...window.matchAll(/-?[\d.]+,\d{2}/g)].map(m => parseGerNum(m[0]));
-    if (nums.length < 5) continue;
+    // Zeile finden, die (a) das Label enthält UND (b) mindestens eine deutsche Dezimalzahl —
+    // sonst wäre es die reine Code-Zeile ohne Werte.
+    const dataLine = lines.find(l =>
+      labels.some(lbl => l.includes(lbl)) && numRe.test(l) && (numRe.lastIndex = 0, true)
+    );
+    if (!dataLine) continue;
+
+    const nums = [...dataLine.matchAll(numRe)].map(m => parseGerNum(m[0]));
+    // Row-Layout: AG1..AG4 (0-4 Werte, können leer sein), Gesamt, ∅Praxis, ∅PG, ∅PGgew, AbwEuro, AbwProz.
+    // Die letzten 6 Werte sind IMMER Gesamt + 3 Durchschnittswerte + 2 Abweichungswerte.
+    if (nums.length < 6) continue;
     const tail = nums.slice(-6);
-    if (tail.length < 6) continue;
     const [gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz] = tail;
-    if (gesamt < praxisProFall) continue;
+
+    // Plausibilität: Gesamt muss deutlich größer als €/Fall sein (Aggregat vs. Durchschnitt).
+    if (gesamt < praxisProFall * 10) continue;
+    // Plausibilität: Prozentabweichung realistisch (KVB-Werte liegen praktisch immer < 500 %).
+    if (!isFinite(abwProz) || Math.abs(abwProz) > 500) continue;
+
     lstgr.push({
       code: def.code, bezeichnung: HF_LSTGR[def.code] || def.label,
       gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz,
     });
   }
 
+  // "Summe kurativ (4)"-Zeile eigenständig parsen
   let summeKurativ = null;
-  const skm = norm.match(/Summe\s+kurativ\s*\(\d\)\s+(?:[\d.,]+\s+){0,4}([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+(-?[\d.,]+)\s+(-?[\d.,]+)/);
-  if (skm) {
-    summeKurativ = {
-      gesamt: parseGerNum(skm[1]), praxisProFall: parseGerNum(skm[2]),
-      pgProFall: parseGerNum(skm[3]), pggewProFall: parseGerNum(skm[4]),
-      abwEur: parseGerNum(skm[5]), abwProz: parseGerNum(skm[6]),
-    };
+  const kLine = lines.find(l => /Summe\s+kurativ/i.test(l) && numRe.test(l) && (numRe.lastIndex = 0, true));
+  if (kLine) {
+    const nums = [...kLine.matchAll(numRe)].map(m => parseGerNum(m[0]));
+    if (nums.length >= 6) {
+      const [gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz] = nums.slice(-6);
+      if (gesamt >= praxisProFall * 10 && Math.abs(abwProz) < 500) {
+        summeKurativ = { gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz };
+      }
+    }
   }
 
   return { type: "HW0024", quarter, bsnr, datum, lstgr, summeKurativ, parsedAt: new Date().toISOString() };
