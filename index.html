@@ -244,6 +244,37 @@
       cursor: pointer; font-size: 0.78rem; color: var(--praxis);
       font-weight: 600; padding: 4px 0;
     }
+    /* ══ ABBR-TOOLTIP ══════════════════════════════════════════ */
+    abbr[title] {
+      text-decoration: underline dotted;
+      text-decoration-color: var(--warm-muted);
+      text-underline-offset: 2px;
+      cursor: help;
+      border: none;
+    }
+    /* ══ WIRKSTOFF-CHIPS ═══════════════════════════════════════ */
+    .wirk-line { font-size: 0.72rem; color: var(--warm-muted); margin-top: 2px; line-height: 1.5; }
+    .wirk-chip {
+      display: inline-block; padding: 1px 7px; margin: 1px 3px 1px 0;
+      border-radius: 8px; font-weight: 600; font-size: 0.68rem;
+    }
+    .wirk-chip.ziel   { background: var(--success-pale); color: var(--success); }
+    .wirk-chip.auch   { background: var(--primary-bg); color: var(--primary-dark); }
+    .wirk-chip.meiden { background: var(--rust-pale); color: var(--rust); }
+    /* ══ TIPP-BOX (praxishebel) ════════════════════════════════ */
+    .tipp-box {
+      background: linear-gradient(to right, var(--primary-bg) 0%, var(--warm-white) 40%);
+      border-left: 3px solid var(--praxis);
+      border-radius: 6px; padding: 10px 12px; margin-top: 6px;
+      font-size: 0.78rem; line-height: 1.55;
+    }
+    .tipp-box .tipp-head {
+      font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--praxis); font-weight: 700; margin-bottom: 4px;
+    }
+    .tipp-box .tipp-wirk {
+      margin-top: 6px; padding-top: 6px; border-top: 1px dashed var(--warm-border);
+    }
     /* ══ RESPONSIVE ═════════════════════════════════════════ */
     @media (max-width: 600px) {
       header { padding: 16px 18px; }
@@ -417,6 +448,15 @@
       <div class="section-label">Kennzahlen</div>
       <div class="kpi-grid" id="hf-kpi-cards"></div>
 
+      <div class="chart-card" id="hf-overview-trend-card">
+        <h2>Verlauf über alle erfassten Quartale</h2>
+        <div class="helper" style="margin-bottom:8px;">
+          Kurative Fallzahl und (falls HW0024 vorhanden) Abweichung zur Prüfgruppe in %.
+          Neue Quartale werden automatisch chronologisch einsortiert — auch nachträglich hochgeladene alte PDFs.
+        </div>
+        <div class="chart-wrap" style="height:300px;"><canvas id="chart-hf-overview-trend"></canvas></div>
+      </div>
+
       <div class="chart-card" id="hf-lstgr-section">
         <h2>Leistungsgruppen-Bilanz</h2>
         <div id="hf-lstgr-info" class="helper" style="margin-bottom:8px;"></div>
@@ -521,6 +561,100 @@ function eur(n) {
 function parseGerNum(s) { if (s == null) return NaN; return parseFloat(String(s).replace(/\./g, "").replace(",", ".")); }
 function parseGerInt(s) { if (s == null) return NaN; return parseInt(String(s).replace(/\./g, "")); }
 
+// ══════════════════════════════════════════════════════════════
+// ABKÜRZUNGS-WÖRTERBUCH (Tooltip on hover)
+// ══════════════════════════════════════════════════════════════
+const ABBR = {
+  DDD:    "Definierte Tagesdosis — WHO-Standardeinheit für die typische Erwachsenen-Tagesdosis eines Wirkstoffs. Vergleichbarkeitsmaß über Präparate hinweg.",
+  PG:     "Prüfgruppe — die Vergleichsgruppe (hier: alle hausärztlich tätigen Ärzte in Bayern). Grundlage der Wirtschaftlichkeitsprüfung.",
+  BAG:    "Berufsausübungsgemeinschaft — mehrere Ärzte in einer gemeinsamen Praxis (früher: Gemeinschaftspraxis).",
+  WSV:    "Wirkstoffvereinbarung — KVB-Bayern-Steuerungsinstrument für die wirtschaftliche Arzneimittelverordnung. Aktuell WSV 3.0.",
+  DOAK:   "Direkte orale Antikoagulantien — Blutverdünner: Apixaban, Rivaroxaban, Dabigatran, Edoxaban.",
+  NSAR:   "Nichtsteroidale Antirheumatika — Schmerz- und Entzündungshemmer wie Ibuprofen, Diclofenac, Naproxen.",
+  PPI:    "Protonenpumpen-Inhibitoren — Magensäureblocker wie Pantoprazol, Omeprazol, Esomeprazol.",
+  GOP:    "Gebührenordnungsposition — 5-stellige EBM-Abrechnungsziffer.",
+  BSNR:   "Betriebsstättennummer — 9-stellige Praxis-Kennung der KV.",
+  LANR:   "Lebenslange Arztnummer — arztbezogene KV-Kennung (unterscheidet Ärzte innerhalb einer BSNR).",
+  KVB:    "Kassenärztliche Vereinigung Bayerns.",
+  ACE:    "Angiotensin-Converting-Enzyme — ACE-Hemmer: Ramipril, Enalapril, Lisinopril. Blutdruck und Herzinsuffizienz.",
+  AT1:    "Angiotensin-II-Rezeptor Typ 1 — Sartane wie Candesartan, Valsartan, Telmisartan. RAS-Blockade ohne ACE-typischen Husten.",
+  SSRI:   "Selektive Serotonin-Wiederaufnahme-Hemmer — Antidepressiva wie Sertralin, Citalopram, Escitalopram.",
+  SNRI:   "Serotonin-Noradrenalin-Wiederaufnahme-Hemmer — Antidepressiva wie Venlafaxin, Duloxetin.",
+  SGLT2:  "Sodium-Glucose Cotransporter 2 — Antidiabetika mit kardiovaskulärem Zusatznutzen: Empagliflozin, Dapagliflozin.",
+  GLP1:   "Glucagon-like Peptide-1 — Antidiabetika (Semaglutid, Dulaglutid) mit Gewichtsreduktion und kardiovaskulärem Nutzen.",
+  DPP4:   "Dipeptidyl-Peptidase-4 — Antidiabetika wie Sitagliptin, Linagliptin.",
+  LAMA:   "Long-acting muscarinic antagonist — langwirksames Anticholinergikum bei COPD/Asthma, z.B. Tiotropium.",
+  LABA:   "Long-acting beta-2 agonist — langwirksamer Beta-2-Agonist bei COPD/Asthma, z.B. Formoterol, Salmeterol.",
+  SABA:   "Short-acting beta-2 agonist — kurzwirksamer Bedarfs-Bronchodilatator, z.B. Salbutamol.",
+  ICS:    "Inhaled corticosteroid — inhalatives Corticoid wie Budesonid, Fluticason.",
+  MART:   "Maintenance And Reliever Therapy — Asthma-Konzept mit Budesonid/Formoterol als Bedarfs- und Basismedikation.",
+  COPD:   "Chronic obstructive pulmonary disease — chronisch obstruktive Lungenerkrankung.",
+  ACS:    "Akutes Koronarsyndrom — instabile Angina oder Herzinfarkt.",
+  DAPT:   "Duale Antiplättchentherapie — meist ASS + P2Y12-Hemmer (Clopidogrel/Prasugrel/Ticagrelor), typisch 6-12 Monate nach ACS/PCI.",
+  PCI:    "Perkutane Koronarintervention — Herzkatheter mit Stent-Anlage.",
+  KHK:    "Koronare Herzkrankheit.",
+  HFrEF:  "Heart Failure with reduced Ejection Fraction — Herzinsuffizienz mit reduzierter Pumpfunktion.",
+  VHF:    "Vorhofflimmern.",
+  VTE:    "Venöse Thromboembolie — TVT und/oder Lungenembolie.",
+  pAVK:   "Periphere arterielle Verschlusskrankheit.",
+  RAS:    "Renin-Angiotensin-System — Blutdruckregulationssystem (umfasst ACE-Hemmer und Sartane).",
+  BtM:    "Betäubungsmittel — rezeptpflichtige Substanzen nach BtMVV (starke Opioide etc.).",
+  LSTGR:  "Leistungsgruppe — Sammelnummer für verwandte GOPs in der KVB-Statistik (z.B. LSTGR 01 = Grundleistungen).",
+  FZ:     "Fallzahl.",
+  eGK:    "elektronische Gesundheitskarte.",
+  DMP:    "Disease Management Programm — strukturiertes Chronikerprogramm (Diabetes, KHK, Asthma, COPD u.a.).",
+  PKV:    "Private Krankenversicherung.",
+  GKV:    "Gesetzliche Krankenversicherung.",
+  ASS:    "Acetylsalicylsäure — Aspirin, in der Kardiologie als Thrombozytenaggregationshemmer 100 mg täglich.",
+  HRT:    "Hormone Replacement Therapy — Hormonersatztherapie in der Menopause.",
+  HCT:    "Hydrochlorothiazid — Thiazid-Diuretikum, häufig in Antihypertensiva-Kombis.",
+  BPH:    "Benignes Prostatasyndrom.",
+  MMSE:   "Mini-Mental State Examination — Kognitions-Screeninginstrument (max. 30 Punkte).",
+  ASCVD:  "Atherosclerotic cardiovascular disease — atherosklerotische Herz-Kreislauf-Erkrankung (Sammelbegriff KHK/Insult/pAVK).",
+  LDL:    "Low-Density Lipoprotein — Cholesterinfraktion, primärer Zielwert der Lipidsenkung.",
+  QT:     "QT-Zeit im EKG — Verlängerung durch bestimmte Medikamente kann zu Rhythmusstörungen führen.",
+  HWI:    "Harnwegsinfekt.",
+  DRU:    "Digital-rektale Untersuchung.",
+  PSA:    "Prostata-spezifisches Antigen — Tumormarker der Prostata.",
+  MAO:    "Monoaminoxidase — Enzym; MAO-B-Hemmer (Rasagilin/Selegilin) bei Parkinson.",
+  TTS:    "Transdermales Therapeutisches System — Pflaster zur Wirkstoff-Freisetzung.",
+  KV:     "Kassenärztliche Vereinigung.",
+  HW:     "KVB-Formularpräfix (z.B. HW0021 = Häufigkeitsstatistik der Prüfungsstelle).",
+};
+
+function applyAbbrTooltips(rootEl) {
+  if (!rootEl) return;
+  const keys = Object.keys(ABBR).sort((a, b) => b.length - a.length);
+  const escaped = keys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(?:^|(?<=[^A-Za-z0-9]))(${escaped.join('|')})(?=[^A-Za-z0-9]|$)`, 'g');
+  const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, {
+    acceptNode: n => {
+      if (n.parentElement.closest('abbr,script,style,input,select,option,textarea')) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    }
+  });
+  const nodes = [];
+  let node;
+  while ((node = walker.nextNode())) nodes.push(node);
+  for (const tn of nodes) {
+    const text = tn.nodeValue;
+    if (!pattern.test(text)) { pattern.lastIndex = 0; continue; }
+    pattern.lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let lastIdx = 0, m;
+    while ((m = pattern.exec(text)) !== null) {
+      if (m.index > lastIdx) frag.appendChild(document.createTextNode(text.slice(lastIdx, m.index)));
+      const a = document.createElement('abbr');
+      a.setAttribute('title', ABBR[m[1]]);
+      a.textContent = m[1];
+      frag.appendChild(a);
+      lastIdx = m.index + m[1].length;
+    }
+    if (lastIdx < text.length) frag.appendChild(document.createTextNode(text.slice(lastIdx)));
+    tn.parentNode.replaceChild(frag, tn);
+  }
+}
+
 async function extractPdfText(file) {
   const buf = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
@@ -605,29 +739,214 @@ function drawLineChart(canvasId, labels, datasets, opts = {}) {
 // WSV — WIRKSTOFFVEREINBARUNG (Bayern)
 // ══════════════════════════════════════════════════════════════
 const WSV_GROUPS = [
-  { nr: "1.1", category: "Generikaziel", name: "Migräne-Mittel (Triptane)", anchor: "Prophylaxe der Migräne" },
-  { nr: "3",   category: "Generikaziel", name: "Antidiabetika ohne Insuline", anchor: "Antidiabetika ohne" },
-  { nr: "4",   category: "Generikaziel", name: "Antiepileptika", anchor: "Antiepileptika" },
-  { nr: "7",   category: "Generikaziel", name: "Antiparkinsonmittel", anchor: "Antiparkinsonmittel" },
-  { nr: "8",   category: "Generikaziel", name: "Antiphlogistika (NSAR)", anchor: "Antiphlogistika" },
-  { nr: "9",   category: "Generikaziel", name: "BtM-pflichtige Opioide", anchor: "BtM-pflichtige Opioide" },
-  { nr: "13",  category: "Generikaziel", name: "Kombi kardiovaskulär", anchor: "Kombigruppe" },
-  { nr: "14",  category: "Generikaziel", name: "Lipidsenker", anchor: "Lipidsenker" },
-  { nr: "15",  category: "Generikaziel", name: "Atemwege (obstruktiv)", anchor: "obstruktiven" },
-  { nr: "17",  category: "Generikaziel", name: "Ophthalmika", anchor: "Ophthalmika" },
-  { nr: "18.1",category: "Generikaziel", name: "Psychoanaleptika", anchor: "Psychoanaleptika" },
-  { nr: "19",  category: "Generikaziel", name: "Psycholeptika", anchor: "Psycholeptika" },
-  { nr: "20",  category: "Generikaziel", name: "RAS-System", anchor: "RAS-System" },
-  { nr: "22",  category: "Generikaziel", name: "Sexualhormone", anchor: "Sexualhormone" },
-  { nr: "23",  category: "Generikaziel", name: "Thrombozytenaggregationshemmer", anchor: "Thrombozyten" },
-  { nr: "26.2",category: "Generikaziel", name: "DOAK", anchor: "DOAK" },
-  { nr: "2",   category: "Leitsubstanzziel", name: "Antibiotika", anchor: "Antibiotika" },
-  { nr: "10",  category: "Leitsubstanzziel", name: "Systemische Corticoide", anchor: "Systemische Corticoide" },
-  { nr: "16",  category: "Leitsubstanzziel", name: "Mittel bei Knochenerkrankungen", anchor: "Knochenerkrankungen" },
-  { nr: "18.3",category: "Leitsubstanzziel", name: "Antidementiva", anchor: "Antidementiva" },
-  { nr: "24.1",category: "Leitsubstanzziel", name: "Prostatasyndrom (benigne)", anchor: "Prostatasyndroms" },
-  { nr: "24.2",category: "Leitsubstanzziel", name: "Urologische Spasmolytika", anchor: "Urologische Spasmolytika" },
-  { nr: "31",  category: "Mengenziel", name: "Protonenpumpenblocker (PPI)", anchor: "Protonenpumpenblocker", isQuantityGoal: true },
+  {
+    nr: "1.1", category: "Generikaziel", name: "Migräne-Mittel (Triptane)", anchor: "Prophylaxe der Migräne",
+    wirkstoffe: {
+      ziel: ["Sumatriptan"],
+      auch: ["Zolmitriptan", "Naratriptan", "Rizatriptan", "Almotriptan"],
+      vermeiden: ["Frovatriptan", "Eletriptan (meist teurer, selten überlegen)"],
+    },
+    tipp: "Sumatriptan 50/100 mg als Generikum deckt den Großteil der Migräneanfälle ab. Frovatriptan nur bei nachgewiesenem Bedarf (lange Halbwertszeit), Rizatriptan-Schmelztabletten bei Übelkeit sinnvoll. Vor jeder Verordnung: Migräne-Diagnose gesichert, Kontraindikationen (KHK, Z.n. Insult) ausgeschlossen.",
+  },
+  {
+    nr: "3", category: "Generikaziel", name: "Antidiabetika ohne Insuline", anchor: "Antidiabetika ohne",
+    wirkstoffe: {
+      ziel: ["Metformin", "Sulfonylharnstoffe (Glimepirid, Gliclazid)"],
+      auch: ["Sitagliptin", "Empagliflozin", "Dapagliflozin", "Semaglutid (oral/s.c.)"],
+      vermeiden: ["Original-DPP4 wenn Generikum verfügbar", "GLP1-Original bei fehlender kardiovaskulärer Indikation"],
+    },
+    tipp: "Metformin bleibt Erstlinie. SGLT2-Hemmer und GLP1-Agonisten sind bei Herzinsuffizienz, KHK oder Niereninsuffizienz leitliniengerecht — Wirtschaftlichkeitsdruck darf hier nicht dominieren. Bei rein glykämischer Indikation ohne Endorgan-Risiko: DPP4-Generika (Sitagliptin) oder Sulfonylharnstoff-Generika bevorzugen.",
+  },
+  {
+    nr: "4", category: "Generikaziel", name: "Antiepileptika", anchor: "Antiepileptika",
+    wirkstoffe: {
+      ziel: ["Levetiracetam", "Lamotrigin", "Valproat", "Gabapentin"],
+      auch: ["Carbamazepin", "Oxcarbazepin", "Topiramat", "Pregabalin"],
+      vermeiden: ["Original-Wirkstoffe wenn bioäquivalentes Generikum vorhanden"],
+    },
+    tipp: "Alle üblichen Antiepileptika sind generisch verfügbar. Achtung: bei stabiler Epilepsie NICHT von Original auf Generikum oder zwischen Generika-Herstellern springen — Spiegel-Schwankungen können Anfälle triggern. Neu einstellen: von Anfang an Generika, Aut-idem ankreuzen erwägen.",
+  },
+  {
+    nr: "7", category: "Generikaziel", name: "Antiparkinsonmittel", anchor: "Antiparkinsonmittel",
+    wirkstoffe: {
+      ziel: ["Levodopa/Benserazid oder Levodopa/Carbidopa", "Pramipexol", "Ropinirol"],
+      auch: ["Rasagilin", "Selegilin", "Amantadin", "Entacapon"],
+      vermeiden: ["Rotigotin-Pflaster wenn oral möglich (teuer)"],
+    },
+    tipp: "L-Dopa-Kombis sind Standard und generisch günstig. Dopaminagonisten (Pramipexol/Ropinirol) generisch, retardierte Formen individuell abwägen. MAO-B-Hemmer Rasagilin ist generisch verfügbar. Bei stabiler Einstellung: Herstellerwechsel vermeiden (motorische Fluktuationen).",
+  },
+  {
+    nr: "8", category: "Generikaziel", name: "Antiphlogistika (NSAR)", anchor: "Antiphlogistika",
+    wirkstoffe: {
+      ziel: ["Ibuprofen", "Diclofenac", "Naproxen"],
+      auch: ["Meloxicam"],
+      vermeiden: ["Celecoxib", "Etoricoxib (Coxibe — teurer, meist nicht überlegen)"],
+    },
+    tipp: "Ibuprofen 400/600 mg oder Naproxen 250/500 mg als Generikum sind bei kurzer Anwendung meist ausreichend. Coxibe nur bei nachgewiesener NSAR-Unverträglichkeit im GI-Trakt UND fehlendem kardiovaskulärem Risiko rechtfertigbar. Bei Dauerpatienten: Magenschutz (PPI) prüfen, aber Deprescribing wenn Dauerbedarf entfällt.",
+  },
+  {
+    nr: "9", category: "Generikaziel", name: "BtM-pflichtige Opioide", anchor: "BtM-pflichtige Opioide",
+    wirkstoffe: {
+      ziel: ["Morphin (retard/unretardiert)", "Fentanyl TTS"],
+      auch: ["Oxycodon", "Buprenorphin TTS", "Hydromorphon"],
+      vermeiden: ["Tapentadol (teurer, WHO-Stufe III mit begrenzter Evidenz)"],
+    },
+    tipp: "Morphin bleibt Referenzsubstanz bei starken Schmerzen — als Generikum sehr günstig. Fentanyl-TTS-Generika bei stabilen chronischen Schmerzen. Oxycodon ist generisch verfügbar; Tapentadol sollte klar begründet sein. Bei tumor- und tumorbegleitenden Schmerzen: Palliativverordnung berücksichtigen. Immer: BtM-Dokumentation korrekt, Sucht-Anamnese.",
+  },
+  {
+    nr: "13", category: "Generikaziel", name: "Kombi kardiovaskulär", anchor: "Kombigruppe",
+    wirkstoffe: {
+      ziel: ["ACE/HCT-Fixkombis generisch", "Sartan/HCT-Fixkombis generisch", "Amlodipin/Valsartan-Kombi generisch"],
+      auch: ["ACE/Amlodipin", "Sartan/Amlodipin (Dreifachkombi bei Bedarf)"],
+      vermeiden: ["Original-Kombipräparate wenn Generikum vorhanden"],
+    },
+    tipp: "Fixkombinationen erhöhen die Adhärenz — sind bei mehrfacher Hypertonie-Medikation sinnvoll. Ramipril/HCT-, Candesartan/HCT- oder Valsartan/HCT-Generika bevorzugen. Vor Umstellung von Monotherapie auf Fixkombi: Blutdruckziel prüfen, Nieren-/Elektrolyt-Kontrolle.",
+  },
+  {
+    nr: "14", category: "Generikaziel", name: "Lipidsenker", anchor: "Lipidsenker",
+    wirkstoffe: {
+      ziel: ["Atorvastatin", "Simvastatin", "Rosuvastatin", "Pravastatin"],
+      auch: ["Ezetimib (bei Statin-Intoleranz oder Zielverfehlung)"],
+      vermeiden: ["Bempedoinsäure als Erstlinie", "PCSK9-Hemmer ohne klare Indikation (sehr teuer)"],
+    },
+    tipp: "Atorvastatin 20/40 mg oder Rosuvastatin 10/20 mg als Generikum sind Standardtherapie bei ASCVD/Diabetes. Bei Nichterreichen des LDL-Ziels: zuerst Statin ausdosieren, dann Ezetimib addieren. PCSK9-Hemmer nur bei therapierefraktärer Hyperlipidämie mit hohem kardiovaskulärem Risiko (Verordnungshoheit im ambulanten Bereich prüfen).",
+  },
+  {
+    nr: "15", category: "Generikaziel", name: "Atemwege (obstruktiv)", anchor: "obstruktiven",
+    wirkstoffe: {
+      ziel: ["Salbutamol (SABA)", "Budesonid/Formoterol", "Tiotropium (LAMA-Generikum)"],
+      auch: ["Beclometason", "Fluticason", "Salmeterol", "LAMA/LABA-Fixkombis generisch"],
+      vermeiden: ["Original-Trelegy/Trimbow wenn generische LAMA/LABA/ICS-Alternative möglich"],
+    },
+    tipp: "Bei Asthma: Budesonid/Formoterol-Generika (MART-Konzept) sind Standard. Bei COPD: LAMA-Monotherapie mit Tiotropium-Generikum, bei häufigen Exazerbationen Triple-Therapie erwägen. Salbutamol als Bedarfsspray günstig. Wichtig: korrekte Inhalationstechnik prüfen — Non-Adhärenz durch schlechte Technik ist häufiger als Wirkungsversagen.",
+  },
+  {
+    nr: "17", category: "Generikaziel", name: "Ophthalmika", anchor: "Ophthalmika",
+    wirkstoffe: {
+      ziel: ["Timolol", "Latanoprost", "Brimonidin", "Dorzolamid"],
+      auch: ["Brinzolamid", "Bimatoprost", "Travoprost"],
+      vermeiden: ["Original-Prostaglandine wenn Latanoprost verträglich"],
+    },
+    tipp: "Bei Glaukom: Latanoprost-Generika als Erstlinie (einmal tägl. abends). Fixkombis Timolol/Dorzolamid oder Latanoprost/Timolol generisch verfügbar. Präservationsmittelfreie Formen bei trockenem Auge / Konservierungsmittel-Unverträglichkeit — dann höhere Kosten gerechtfertigt.",
+  },
+  {
+    nr: "18.1", category: "Generikaziel", name: "Psychoanaleptika (Antidepressiva)", anchor: "Psychoanaleptika",
+    wirkstoffe: {
+      ziel: ["Sertralin", "Citalopram", "Mirtazapin", "Venlafaxin"],
+      auch: ["Escitalopram", "Duloxetin", "Fluoxetin", "Paroxetin"],
+      vermeiden: ["Trazodon-Originale wenn Generikum vorhanden", "Vortioxetin (teurer, evidenzbasierter Vorteil begrenzt)"],
+    },
+    tipp: "SSRI-Erstlinie: Sertralin oder Citalopram als Generikum. Bei Schlafstörung/Gewichtsverlust: Mirtazapin-Generikum. Escitalopram theoretisch etwas wirksamer als Citalopram, aber teurer — für die meisten Patienten reicht Citalopram. Immer: QT-Zeit-Kontrolle bei Citalopram (max. 40 mg/d, Ältere 20 mg/d).",
+  },
+  {
+    nr: "19", category: "Generikaziel", name: "Psycholeptika (Neuroleptika/Benzo)", anchor: "Psycholeptika",
+    wirkstoffe: {
+      ziel: ["Risperidon", "Olanzapin", "Quetiapin", "Aripiprazol"],
+      auch: ["Haloperidol (Akutversorgung)", "Lorazepam", "Oxazepam"],
+      vermeiden: ["Cariprazin/Lurasidon als Erstlinie (sehr teuer)", "Benzodiazepine als Dauertherapie"],
+    },
+    tipp: "Atypische Neuroleptika (Risperidon, Olanzapin, Quetiapin) sind generisch verfügbar — meist facharztgeführt, hausärztlich Weiterverordnung. Benzodiazepine (Oxazepam kurzwirksam) nur kurzzeitig (max. 4 Wochen), Deprescribing bei Chronikern proaktiv angehen. Bei Demenz mit Verhaltensauffälligkeiten: nicht-medikamentöse Ansätze zuerst.",
+  },
+  {
+    nr: "20", category: "Generikaziel", name: "RAS-System (ACE/Sartane)", anchor: "RAS-System",
+    wirkstoffe: {
+      ziel: ["Ramipril", "Enalapril", "Lisinopril", "Candesartan", "Valsartan"],
+      auch: ["Telmisartan", "Losartan", "Perindopril"],
+      vermeiden: ["Olmesartan-Original wenn generisch verfügbar"],
+    },
+    tipp: "Ramipril 2,5/5/10 mg oder Candesartan 8/16/32 mg als Generikum decken die meisten Hypertonie- und HFrEF-Fälle ab. Bei ACE-Hemmer-Husten: Wechsel zu Sartan (auch generisch günstig). Duale RAS-Blockade (ACE+Sartan) ist bis auf Ausnahmen kontraindiziert.",
+  },
+  {
+    nr: "22", category: "Generikaziel", name: "Sexualhormone", anchor: "Sexualhormone",
+    wirkstoffe: {
+      ziel: ["Estradiol-Gel/Pflaster generisch", "Estriol lokal", "Progesteron (mikronisiert)"],
+      auch: ["Testosteron-Gel bei nachgewiesenem Hypogonadismus"],
+      vermeiden: ["Kombi-HRT-Originale wenn Generika verfügbar"],
+    },
+    tipp: "Menopausale HRT: transdermales Estradiol (Pflaster/Gel) + orales oder vaginales Progesteron — geringeres Thromboserisiko als orale HRT. Lokale Estrioltherapie bei urogenitalem Syndrom. Vor jeder HRT: Aufklärung Nutzen/Risiko dokumentieren (Brustkrebs, VTE).",
+  },
+  {
+    nr: "23", category: "Generikaziel", name: "Thrombozytenaggregationshemmer", anchor: "Thrombozyten",
+    wirkstoffe: {
+      ziel: ["ASS 100 mg", "Clopidogrel 75 mg"],
+      auch: ["Prasugrel", "Ticagrelor"],
+      vermeiden: ["Prasugrel/Ticagrelor als Dauertherapie außerhalb DAPT-Zeitraum (deutlich teurer, Blutungsrisiko)"],
+    },
+    tipp: "ASS 100 mg-Generika bei atherosklerotischer Sekundärprävention. Clopidogrel-Generika bei ASS-Unverträglichkeit oder pAVK. Nach ACS/PCI: DAPT mit ASS+Prasugrel/Ticagrelor für 6-12 Monate (fachärztliche Vorgabe), danach De-Escalation auf ASS + Clopidogrel oder ASS-Mono prüfen — häufigster Kostenfaktor sind vergessene De-Escalations!",
+  },
+  {
+    nr: "26.2", category: "Generikaziel", name: "DOAK", anchor: "DOAK",
+    wirkstoffe: {
+      ziel: ["Rivaroxaban-Generika (seit Patentablauf 2024)", "Apixaban-Generika (seit 2026 in D)"],
+      auch: ["Dabigatran (Pradaxa — Original noch, Generikum seit 2026)", "Edoxaban"],
+      vermeiden: ["Original-Eliquis (Apixaban) wenn Generikum verfügbar", "Xarelto-Original wenn Rivaroxaban-Generikum verfügbar"],
+    },
+    tipp: "Ab 2026 sind Apixaban- und Rivaroxaban-Generika verfügbar — Wechsel auf identische Wirkstoffdosis möglich (Aut-idem-Kreuz beachten). Apixaban 2×5 mg bleibt Präferenz bei niereninsuffizienten oder älteren VHF-Patienten (bessere Sicherheitsdaten). Achtung: Bei Umstellung Original → Generikum Patientenaufklärung dokumentieren, Compliance-Kontrolle beim Folgetermin.",
+  },
+  {
+    nr: "2", category: "Leitsubstanzziel", name: "Antibiotika", anchor: "Antibiotika",
+    wirkstoffe: {
+      ziel: ["Amoxicillin (± Clavulansäure)", "Doxycyclin", "Cotrimoxazol", "Fosfomycin (Harnwege)", "Nitrofurantoin"],
+      auch: ["Cefuroxim", "Clarithromycin (kritische Indikation)"],
+      vermeiden: ["Ciprofloxacin/Levofloxacin (Rote-Hand: Sehnenrupturen, QT, psychiatrisch — nur wenn keine Alternative)", "Cephalosporin-Breitspektrum in der Primärversorgung"],
+    },
+    tipp: "Fluorchinolone stark reduzieren (Rote-Hand-Brief 2019): NICHT bei banalen HWI, Bronchitis, Sinusitis. Bei unkompliziertem HWI: Fosfomycin-Einmalgabe oder Nitrofurantoin. Bei Erwachsenen-Pneumonie ambulant: Amoxicillin 3×1 g. Doxycyclin bei atypischer Pneumonie oder Borreliose. Immer: Antibiotic Stewardship — Diagnose kritisch prüfen, Kürzer-ist-besser (7 statt 10 Tage), Reserve schonen.",
+  },
+  {
+    nr: "10", category: "Leitsubstanzziel", name: "Systemische Corticoide", anchor: "Systemische Corticoide",
+    wirkstoffe: {
+      ziel: ["Prednisolon", "Prednison"],
+      auch: ["Methylprednisolon", "Dexamethason (Kurzzeit)"],
+      vermeiden: ["Deflazacort (teuer, keine Vorteile)"],
+    },
+    tipp: "Prednisolon-Generika sind Standard für alle Indikationen (COPD-Exazerbation, Autoimmun-Schübe, allergische Reaktion). Kurzzeitgabe (5-7 Tage) benötigt kein Ausschleichen, längere Therapien (>3 Wochen) schrittweise reduzieren. Bei Dauertherapie: Osteoporoseprophylaxe, Blutzuckerkontrolle, Impfstatus.",
+  },
+  {
+    nr: "16", category: "Leitsubstanzziel", name: "Mittel bei Knochenerkrankungen", anchor: "Knochenerkrankungen",
+    wirkstoffe: {
+      ziel: ["Alendronat", "Risedronat"],
+      auch: ["Ibandronat", "Zoledronat (i.v., 1×/Jahr)"],
+      vermeiden: ["Denosumab (Prolia) als Erstlinie ohne Bisphosphonat-Vorbehandlung (teuer, Rebound-Frakturrisiko bei Absetzen)"],
+    },
+    tipp: "Alendronat 70 mg 1×/Woche als Generikum ist Osteoporose-Erstlinie. Bei Unverträglichkeit oder Adhärenz-Problem: Zoledronat i.v. 1×/Jahr (Facharzt/Krankenhaus). Denosumab NUR wenn Bisphosphonate kontraindiziert oder versagt haben — Absetzen verursacht Rebound, deshalb nie einfach stoppen. Vitamin D + Ca supplementieren nicht vergessen.",
+  },
+  {
+    nr: "18.3", category: "Leitsubstanzziel", name: "Antidementiva", anchor: "Antidementiva",
+    wirkstoffe: {
+      ziel: ["Donepezil", "Rivastigmin (oral)", "Memantin"],
+      auch: ["Galantamin"],
+      vermeiden: ["Rivastigmin-Pflaster (deutlich teurer als oral) wenn oral toleriert", "Ginkgo-Extrakte (Evidenzlage schwach)"],
+    },
+    tipp: "Donepezil 5/10 mg-Generikum bei leichter/mittlerer Alzheimer-Demenz — Facharzt (Neurologe) startet, hausärztliche Weiterverordnung. Memantin bei mittlerer/schwerer Alzheimer-Demenz. Rivastigmin-Pflaster nur bei Schluckproblemen. Regelmäßige Reevaluation nach 6 Monaten: MMSE, klinischer Nutzen — bei Nichtwirken absetzen.",
+  },
+  {
+    nr: "24.1", category: "Leitsubstanzziel", name: "Prostatasyndrom (benigne)", anchor: "Prostatasyndroms",
+    wirkstoffe: {
+      ziel: ["Tamsulosin", "Finasterid"],
+      auch: ["Alfuzosin", "Doxazosin", "Dutasterid"],
+      vermeiden: ["Silodosin-Original wenn Tamsulosin verträglich", "Kombipräparate Original (Combodart) wenn Einzelwirkstoffe generisch verfügbar"],
+    },
+    tipp: "Tamsulosin 0,4 mg als Generikum ist BPH-Standardtherapie. Bei großer Prostata (>40 g) oder Progression: Finasterid oder Dutasterid als 5-Alpha-Reduktase-Hemmer hinzufügen — dauert 3-6 Monate bis Wirkung. Vor jeder Neuverordnung: PSA-Bestimmung, DRU zum Ausschluss Karzinom.",
+  },
+  {
+    nr: "24.2", category: "Leitsubstanzziel", name: "Urologische Spasmolytika", anchor: "Urologische Spasmolytika",
+    wirkstoffe: {
+      ziel: ["Trospium", "Oxybutynin", "Tolterodin"],
+      auch: ["Solifenacin"],
+      vermeiden: ["Mirabegron als Erstlinie (teuer, kardiovaskuläre Nebenwirkungen)", "Darifenacin-Original"],
+    },
+    tipp: "Trospium-Generikum bei überaktiver Blase — passiert die Blut-Hirn-Schranke wenig, gute Wahl bei Älteren. Oxybutynin retard günstig, aber mehr ZNS-Nebenwirkungen. Mirabegron bei anticholinerger Kontraindikation, aber Blutdruck-Kontrolle. Bei Älteren: anticholinerge Belastung (Beers-Liste) prüfen — Sturzrisiko, Verwirrtheit.",
+  },
+  {
+    nr: "31", category: "Mengenziel", name: "Protonenpumpenblocker (PPI)", anchor: "Protonenpumpenblocker",
+    isQuantityGoal: true,
+    wirkstoffe: {
+      ziel: ["Pantoprazol 20/40 mg", "Omeprazol 20/40 mg"],
+      auch: ["Esomeprazol", "Lansoprazol"],
+      vermeiden: ["Rabeprazol/Dexlansoprazol (teurer, keine relevanten Vorteile)"],
+    },
+    tipp: "PPI ist ein MENGENZIEL — die Aufgabe ist NICHT mehr, sondern WENIGER zu verordnen. Deprescribing prüfen bei allen Patienten ohne klare Dauerindikation (Barrett, Zollinger-Ellison, hochdosierte NSAR-Dauertherapie): schrittweises Ausschleichen über 4-8 Wochen, bei Rebound-Beschwerden H2-Blocker als Übergang. Pantoprazol 20 mg-Generikum ist Standard; H. pylori-Eradikation ist eigene Indikation (Kurzzeit).",
+  },
 ];
 
 function wsvFindTriple(text, anchor) {
@@ -792,7 +1111,9 @@ function renderWsvQuarter() {
   if (!last) return;
 
   document.getElementById("wsv-source-info").textContent = last.documentDate ? `Stand: ${last.documentDate}` : "";
-  document.getElementById("wsv-summary").innerHTML = wsvSummary(last);
+  const summaryEl = document.getElementById("wsv-summary");
+  summaryEl.innerHTML = wsvSummary(last);
+  applyAbbrTooltips(summaryEl);
 
   const counts = { gruen: 0, gelb: 0, rot: 0 };
   last.ziele.forEach(z => counts[z.status]++);
@@ -821,6 +1142,8 @@ function renderWsvQuarter() {
   zsel.innerHTML = last.ziele.map(z => `<option value="${z.nr}">${z.nr} — ${z.name}</option>`).join("");
   zsel.onchange = () => wsvDrawZielTrend(zsel.value);
   wsvDrawZielTrend(last.ziele[0]?.nr);
+  // Tooltips auch auf statische Textblöcke (Info-Box, Section-Labels etc.) im aktiven Panel anwenden
+  applyAbbrTooltips(document.getElementById("tab-wsv"));
 }
 
 function wsvMergeHist() {
@@ -829,6 +1152,17 @@ function wsvMergeHist() {
   if (last?.historicalGesamt) last.historicalGesamt.forEach(h => map.set(h.quarter, h.value));
   wsvData.forEach(d => { if (d.gesamtErgebnis !== null) map.set(d.quarter, d.gesamtErgebnis); });
   return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([q, v]) => ({ quarter: q, value: v }));
+}
+
+function wsvGroupDef(nr) { return WSV_GROUPS.find(g => g.nr === nr); }
+
+function wirkstoffChipsHtml(w) {
+  if (!w) return "";
+  let s = "";
+  (w.ziel || []).forEach(x => s += `<span class="wirk-chip ziel">✓ ${x}</span>`);
+  (w.auch || []).forEach(x => s += `<span class="wirk-chip auch">${x}</span>`);
+  (w.vermeiden || []).forEach(x => s += `<span class="wirk-chip meiden">⚠ ${x}</span>`);
+  return s;
 }
 
 function wsvRenderDetail(last) {
@@ -845,7 +1179,9 @@ function wsvRenderDetail(last) {
     const diffStr = (diff >= 0 ? "+" : "") + diff.toFixed(2);
     const diffColor = diff >= 0 ? "var(--success)" : "var(--rust)";
     const dotCol = z.status === "gruen" ? "var(--success)" : z.status === "gelb" ? "var(--amber)" : "var(--rust)";
-    html += `<tr><td>${z.nr}</td><td><b>${z.name}</b></td>
+    const def = wsvGroupDef(z.nr);
+    const wirkLine = def?.wirkstoffe ? `<div class="wirk-line">${wirkstoffChipsHtml(def.wirkstoffe)}</div>` : "";
+    html += `<tr><td>${z.nr}</td><td><b>${z.name}</b>${wirkLine}</td>
       <td style="font-size:0.72rem;color:var(--warm-muted);">${z.category}</td>
       <td class="num">${z.anteil.toFixed(2)}</td><td class="num">${z.zielwert.toFixed(2)}</td>
       <td class="num" style="color:${diffColor};font-weight:600;">${diffStr}</td>
@@ -853,8 +1189,10 @@ function wsvRenderDetail(last) {
       <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dotCol};"></span></td></tr>`;
   });
   html += `</tbody></table>`;
-  html += `<div class="helper" style="margin-top:8px;">Sortiert nach Handlungsbedarf (rot zuerst), dann nach DDD. Ampel-Heuristik: grün ab Ziel erreicht · gelb bis 10 % darunter · rot darüber. Die echte KVB-Bewertung kann durch Wirtschaftlichkeitsfaktoren leicht abweichen.</div>`;
-  document.getElementById("wsv-detail-table").innerHTML = html;
+  html += `<div class="helper" style="margin-top:8px;">Sortiert nach Handlungsbedarf (rot zuerst), dann nach DDD. Ampel: grün = Ziel erreicht · gelb = bis 10 % darunter · rot = darüber. Die echte KVB-Bewertung kann durch Wirtschaftlichkeitsfaktoren leicht abweichen. Chips: <span class="wirk-chip ziel">✓ Zielwirkstoff</span> <span class="wirk-chip auch">weitere Optionen</span> <span class="wirk-chip meiden">⚠ oft ökonomisch kritisch</span></div>`;
+  const el = document.getElementById("wsv-detail-table");
+  el.innerHTML = html;
+  applyAbbrTooltips(el);
 }
 
 function wsvDrawZielTrend(nr) {
@@ -898,17 +1236,21 @@ function wsvSummary(last) {
   }
   s += `<p><b>Ampelbilanz:</b> ${counts.gruen} grün, ${counts.gelb} gelb, ${counts.rot} rot.</p>`;
   if (reds.length > 0) {
-    s += `<p><b>Größte Hebel (rote Ziele nach DDD):</b></p><ul>`;
+    s += `<p style="margin-top:14px;"><b>Größte Hebel (rote Ziele nach DDD-Volumen sortiert):</b></p>`;
     reds.slice(0, 4).forEach(z => {
       const diff = z.anteil - z.zielwert;
-      s += `<li><b>${z.name}</b>: ${z.anteil.toFixed(1)} % gegen Ziel ${z.zielwert.toFixed(1)} % (Δ ${diff.toFixed(1)} pp, ${fmt(z.ddd)} DDD)</li>`;
+      const def = wsvGroupDef(z.nr);
+      s += `<div class="tipp-box">
+        <div class="tipp-head">${z.nr} · ${z.name} — ${z.anteil.toFixed(1)} % (Ziel ${z.zielwert.toFixed(1)} %, Δ ${diff.toFixed(1)} pp, ${fmt(z.ddd)} DDD)</div>`;
+      if (def?.tipp) s += `<div>${def.tipp}</div>`;
+      if (def?.wirkstoffe) s += `<div class="tipp-wirk">${wirkstoffChipsHtml(def.wirkstoffe)}</div>`;
+      s += `</div>`;
     });
-    s += `</ul>`;
   }
   if (yellows.length > 0 && reds.length <= 4) {
-    s += `<p><b>Knapp verfehlt:</b> ${yellows.map(z => z.name).join(", ")}.</p>`;
+    s += `<p style="margin-top:14px;"><b>Knapp verfehlt (Feintuning oft ausreichend):</b> ${yellows.map(z => z.name).join(", ")}.</p>`;
   }
-  s += `<p class="helper" style="margin-top:10px;">Diese Zusammenfassung wurde automatisch erstellt und ersetzt keine Pharmakotherapieberatung. Bei roten Zielen mit hohem Volumen lohnt sich der KVB-Beratungstermin: <a href="https://www.kvb.de/mitglieder/beratung" target="_blank">kvb.de/mitglieder/beratung</a></p>`;
+  s += `<p class="helper" style="margin-top:14px;">Die Praxishebel-Tipps sind orientierende Beispiele, keine Verordnungsanweisung — <b>individuelle Patientensituation, Kontraindikationen und Leitlinien haben Vorrang</b>. Bei roten Zielen mit hohem Volumen lohnt sich der KVB-Beratungstermin: <a href="https://www.kvb.de/mitglieder/beratung" target="_blank">kvb.de/mitglieder/beratung</a></p>`;
   return s;
 }
 
@@ -923,18 +1265,108 @@ const HF_LSTGR = {
   "13":"OP-/Narkose-/Überwach.-L.","14":"Kosten/Pauschalerstattungen",
   "15":"Impfungen","16":"DMP Leistungen",
 };
+// EBM-Bezeichnungen — konservativ befüllt: nur wo ich hausärztlich sicher weiß, was die Ziffer ist.
+// Bei Unsicherheit LEER lassen, statt zu raten. Der User kann Bezeichnungen jederzeit hier ergänzen.
 const HF_LABELS = {
-  "03000":"Versichertenpauschale","03004":"Versichertenpauschale (Kind./Jug.)",
-  "03005":"Versichertenpauschale (76+)","03008":"Vers.-Pauschale Pflegeeinrichtungen",
-  "03040":"Vorhaltepauschale","03220":"Chronikerpauschale","03221":"Chronikerzuschlag",
-  "03222":"Chronikerpauschale-Zuschlag","03230":"Problemorientiertes Gespräch",
-  "03241":"Geriatrisches Basisassessment","01410":"Hausbesuch","01411":"Dringender Hausbesuch",
-  "01412":"Unverzüglicher Hausbesuch","01430":"Verwaltungskomplex","01435":"Telefonische Beratung",
-  "01480":"Besuch Pflegeheim","01641":"Brief Versandkostenpauschale","01648":"Pauschale eGK",
-  "01731":"Hautkrebs-Früherkennung","01732":"Gesundheitsuntersuchung",
-  "01734":"Untersuchung 18-34","01740":"Koloskopie-Beratung","01745":"Koloskopie-Beratung Folge",
+  // Kapitel 01 — Allgemeine hausärztliche Leistungen
+  "01100":"Unzeit-Zuschlag (19-22 Uhr / Sa 7-14 Uhr)",
+  "01101":"Unzeit-Zuschlag (22-7 Uhr / So/Feiertag)",
+  "01102":"Zuschlag Samstag 7-14 Uhr",
+  "01410":"Hausbesuch",
+  "01411":"Dringender Hausbesuch (Notfall)",
+  "01412":"Unverzüglicher Hausbesuch (Eilfall)",
+  "01413":"Besuch im Alten-/Pflegeheim",
+  "01415":"Besuch Palliativpatient",
+  "01430":"Verwaltungskomplex",
+  "01435":"Telefonische Beratung",
+  "01440":"Verweilgebühr",
+  "01471":"Notfallpauschale",
+  "01475":"Notfallkonsultationspauschale",
+  "01480":"Mitbesuch Pflegeeinrichtung",
+  "01640":"Portokosten (Pauschale)",
+  "01641":"Brief / Bericht-Versand",
+  "01642":"E-Arztbrief",
+  "01647":"Zusatzpauschale eGK-Prüfung",
+  "01648":"eGK-Prüfziffer (VSDM)",
+  "01670":"Konsiliarbericht Facharzt",
+  "01700":"Grundpauschale Reise-/Impfberatung",
+  "01721":"Besuchsleistung Notfall",
+  "01731":"Hautkrebs-Früherkennung (Screening)",
+  "01732":"Gesundheitsuntersuchung (Check-up)",
+  "01734":"Untersuchung 18-34 Jahre",
+  "01737":"Immunologischer Stuhltest (iFOBT)",
+  "01740":"Koloskopie-Beratung",
+  "01745":"Koloskopie-Wiederholung",
+  "01746":"Koloskopie-Auswertung",
+  "01747":"Koloskopie-Zusatz",
+  "01748":"Koloskopie-Zusatz",
+  // Kapitel 03 — Hausärztliche Grundleistungen
+  "03000":"Versichertenpauschale (Grundpauschale)",
+  "03002":"Vers.-Pauschale Kinder 0-4 J.",
+  "03003":"Vers.-Pauschale 5-18 J.",
+  "03004":"Vers.-Pauschale 19-54 J.",
+  "03005":"Vers.-Pauschale 55-75 J.",
+  "03008":"Vers.-Pauschale 76+",
+  "03020":"Zusatzpauschale zu Versichertenpauschale",
+  "03040":"Vorhaltepauschale (Grundbetrag)",
+  "03041":"Vorhaltepauschale Zuschlag I",
+  "03042":"Vorhaltepauschale Zuschlag II",
+  "03062":"Palliativmedizinische Ersterhebung",
+  "03063":"Palliativmedizin Zusatz",
+  "03220":"Chronikerpauschale",
+  "03221":"Chronikerzuschlag",
+  "03222":"Chronikerpauschale (Erweiterung)",
+  "03230":"Problemorientiertes Gespräch (min. 10 Min.)",
+  "03241":"Geriatrisches Basisassessment",
+  "03321":"Langzeit-Blutdruckmessung",
+  "03322":"Langzeit-EKG",
+  "03324":"Belastungs-EKG",
+  "03330":"Spirographie",
+  "03331":"Ergospirometrie",
+  "03360":"Duplex-Sonographie",
+  "03362":"Dopplersonographie",
+  // Kapitel 02 — Ärztliche Leistungen allgemein
+  "02300":"Kleine Chirurgie",
+  "02301":"Chirurgie mittleren Umfangs",
+  "02302":"Chirurgie größeren Umfangs",
+  "02310":"Wundbehandlung",
+  "02311":"Wundverband groß",
+  "02312":"Behandlung Ulcus cruris",
+  "02313":"Kompressionsbehandlung",
+  "02314":"Chronische Wunde (Zusatz)",
+  // Kapitel 30 — Sondertherapien
+  "30980":"Sozialpsychiatrisch Notfallbetreuung",
+  "30984":"Palliativmedizinischer Konsiliar",
+  // Kapitel 32 — Labor
   "32001":"Wirtschaftlichkeitsbonus Labor",
+  // Kapitel 33 — Sonographie
+  "33012":"Sonographie Abdomen",
+  "33042":"Sonographie Schilddrüse",
+  "33043":"Sonographie Nieren",
+  // Kapitel 35 — Psychosomatik
+  "35100":"Verbale Intervention Psychosomatik",
+  "35110":"Psychosomatik Grundversorgung",
+  // Kapitel 37 — Kooperation Pflegeheim
+  "37100":"Kooperationsvertrag Pflegeheim",
+  "37105":"Palliativmed. Betreuung Zusatz",
+  // Kapitel 92 (Impfungen)
+  "92200":"Standardimpfung (Erwachsene)",
+  "92276":"Impfung Reisemedizin",
+  "92698":"Impfung COVID-19",
+  "92700":"Impfung Influenza",
+  "92701":"Impfung Pneumokokken",
 };
+
+// Label-Lookup mit Fallback auf Basis-GOP (bei Suffix-Varianten wie 03004R, 01737M)
+function hfLabel(gop) {
+  if (HF_LABELS[gop]) return HF_LABELS[gop];
+  if (/[A-Z]$/.test(gop)) {
+    const base = gop.slice(0, -1);
+    if (HF_LABELS[base]) return HF_LABELS[base];
+  }
+  return "";
+}
+function hfHasLabel(gop) { return !!hfLabel(gop); }
 
 const HF_NUM = "(?:-?[\\d.]+,\\d{2}|-?\\d+(?:\\.\\d{3})*)";
 const HF_GOP = "(\\d{5}[A-Z]?)";
@@ -1120,20 +1552,20 @@ function renderHfPreview() {
       html += `.</p>`;
       if (p.gops.length < 30) html += `<div class="warning-box">⚠ Nur ${p.gops.length} GOPs erkannt — normal wären 150+. Bitte Stichprobe prüfen.</div>`;
       const top = [...p.gops].sort((a, b) => b.haeufigkeit - a.haeufigkeit).slice(0, 5);
-      html += `<details><summary>Stichprobe Top-5 GOPs</summary>
-        <table style="margin-top:8px;font-size:0.72rem;"><thead><tr><th>GOP</th><th class="num">Häufig.</th><th class="num">€ ges.</th><th class="num">Abw. %</th><th class="num">Verbr. %</th></tr></thead><tbody>`;
+      html += `<details><summary>Stichprobe Top-5 GOPs zur Plausibilitätskontrolle</summary>
+        <table style="margin-top:8px;font-size:0.72rem;"><thead><tr><th>GOP</th><th>Bezeichnung</th><th class="num">Häufig.</th><th class="num">Abw. %</th><th class="num">Verbr. %</th></tr></thead><tbody>`;
       top.forEach(g => {
-        html += `<tr><td>${g.gop}</td><td class="num">${fmt(g.haeufigkeit)}</td><td class="num">${eur(g.gesamtbetrag)}</td><td class="num">${g.abweichung.toFixed(2)}</td><td class="num">${g.ansatzPraxen.toFixed(2)}</td></tr>`;
+        html += `<tr><td>${g.gop}</td><td>${hfLabel(g.gop)}</td><td class="num">${fmt(g.haeufigkeit)}</td><td class="num">${g.abweichung.toFixed(1)}</td><td class="num">${g.ansatzPraxen.toFixed(1)}</td></tr>`;
       });
       html += `</tbody></table></details>`;
     } else {
       html += `<p style="font-size:0.75rem;color:var(--warm-muted);">Erkannt: <b>${p.lstgr.length}</b> LSTGR-Aggregate`;
-      if (p.summeKurativ) html += `, Summe kurativ ${eur(p.summeKurativ.gesamt)} (∅ ${p.summeKurativ.praxisProFall.toFixed(2)} €/Fall)`;
+      if (p.summeKurativ) html += `, gewichtete Abweichung Prüfgruppe ${(p.summeKurativ.abwProz > 0 ? "+" : "") + p.summeKurativ.abwProz.toFixed(1)} %`;
       html += `.</p>`;
-      html += `<details><summary>Stichprobe LSTGR</summary>
-        <table style="margin-top:8px;font-size:0.72rem;"><thead><tr><th>LSTGR</th><th>Bezeichnung</th><th class="num">Gesamt €</th><th class="num">∅ Praxis</th><th class="num">Abw. %</th></tr></thead><tbody>`;
+      html += `<details><summary>Stichprobe LSTGR zur Plausibilitätskontrolle</summary>
+        <table style="margin-top:8px;font-size:0.72rem;"><thead><tr><th>LSTGR</th><th>Bezeichnung</th><th class="num">Abw. Prüfgruppe %</th></tr></thead><tbody>`;
       p.lstgr.slice(0, 6).forEach(l => {
-        html += `<tr><td>${l.code}</td><td>${l.bezeichnung}</td><td class="num">${eur(l.gesamt)}</td><td class="num">${l.praxisProFall.toFixed(2)}</td><td class="num">${l.abwProz.toFixed(2)}</td></tr>`;
+        html += `<tr><td>${l.code}</td><td>${l.bezeichnung}</td><td class="num">${l.abwProz > 0 ? "+" : ""}${l.abwProz.toFixed(1)}</td></tr>`;
       });
       html += `</tbody></table></details>`;
     }
@@ -1194,13 +1626,17 @@ function renderHfQuarter() {
   if (hw24) src.push(`HW0024 (${hw24.lstgr.length} LSTGR)`);
   document.getElementById("hf-source-info").textContent = src.length ? "Quellen: " + src.join(" + ") : "";
 
-  document.getElementById("hf-summary").innerHTML = hfBuildSummary(hw21, hw24);
+  const hfSumEl = document.getElementById("hf-summary");
+  hfSumEl.innerHTML = hfBuildSummary(hw21, hw24);
+  applyAbbrTooltips(hfSumEl);
   hfRenderKpis(hw21, hw24);
+  hfRenderOverviewTrend();
   hfRenderLstgr(hw21, hw24);
   hfRenderDeviation(hw21);
   hfRenderSpread(hw21);
   hfRenderDetail(hw21);
   hfRenderTrendSelect(hw21);
+  applyAbbrTooltips(document.getElementById("tab-haeuf"));
 }
 
 function hfBuildSummary(hw21, hw24) {
@@ -1213,55 +1649,105 @@ function hfBuildSummary(hw21, hw24) {
     s += `.</p>`;
   }
   if (hw24?.summeKurativ) {
-    const k = hw24.summeKurativ;
-    s += `<p><b>Wirtschaftlichkeit gesamt (HW0024):</b> ∅ <b>${k.praxisProFall.toFixed(2)} €/Fall</b> Praxis gegen <b>${k.pggewProFall.toFixed(2)} €/Fall</b> gewichteter Prüfgruppen-Schnitt — `;
-    if (k.abwProz > 5) s += `<b>+${k.abwProz.toFixed(1)} %</b> über dem Schnitt (Honorarstärke).`;
-    else if (k.abwProz < -5) s += `<b>${k.abwProz.toFixed(1)} %</b> unter dem Schnitt (möglicherweise Honorarpotential).`;
-    else s += `deckungsgleich (Abw. ${k.abwProz.toFixed(1)} %).`;
+    const p = hw24.summeKurativ.abwProz;
+    s += `<p><b>Wirtschaftlichkeit gesamt (HW0024):</b> gewichtete Abweichung zum Prüfgruppen-Schnitt liegt bei `;
+    if (p > 5) s += `<b>+${p.toFixed(1)} %</b> (Honorarstärke gegenüber dem Schnitt).`;
+    else if (p < -5) s += `<b>${p.toFixed(1)} %</b> (unter dem Schnitt — Honorarpotential).`;
+    else s += `<b>${p.toFixed(1)} %</b> (praktisch deckungsgleich).`;
     s += `</p>`;
   }
+
   if (hw21) {
-    const sig = hw21.gops.filter(g => g.haeufigkeit >= 10 && Math.abs(g.abweichung) > 50);
-    const pos = sig.filter(g => g.abweichung > 0).sort((a, b) => b.abweichung - a.abweichung).slice(0, 3);
-    const neg = sig.filter(g => g.abweichung < 0).sort((a, b) => a.abweichung - b.abweichung).slice(0, 3);
-    if (pos.length) {
-      s += `<p><b>Stärkste Überschreitungen (>50 % über Schnitt, Volumen ≥10):</b></p><ul>`;
-      pos.forEach(g => {
-        const lab = HF_LABELS[g.gop] || "";
-        s += `<li><b>${g.gop}</b>${lab ? ` (${lab})` : ""}: ${g.abweichung.toFixed(1)} % über Schnitt, ${fmt(g.haeufigkeit)}× abgerechnet</li>`;
+    // ─── PRÜFRISIKO-KANDIDATEN ──────────────────────────
+    const risk = hw21.gops.filter(HF_PRUEFRISIKO)
+      .sort((a, b) => b.abweichung - a.abweichung);
+    if (risk.length) {
+      s += `<div class="tipp-box" style="border-left-color:var(--rust);background:linear-gradient(to right, var(--rust-pale) 0%, var(--warm-white) 40%);">
+        <div class="tipp-head" style="color:var(--rust);">▲ Prüfrisiko-Kandidaten (${risk.length}) — hier sind wir definitiv zu hoch</div>
+        <div style="font-size:0.75rem;margin-bottom:6px;">Diese GOPs erfüllen alle drei Kriterien gleichzeitig: Häufigkeit ≥ 10, Abweichung &gt; +100 % über Schnitt, und Verbreitung &lt; 30 % in der Prüfgruppe (fast niemand rechnet sie so oft ab). Solche Konstellationen können Auffälligkeitsprüfungen der KVB nach sich ziehen — Begründung in der Patientenakte griffbereit halten.</div>
+        <table style="font-size:0.75rem;margin-top:6px;"><thead><tr><th>GOP</th><th>Bezeichnung</th><th class="num">Häufig.</th><th class="num">Abw. %</th><th class="num">Verbr. %</th></tr></thead><tbody>`;
+      risk.slice(0, 8).forEach(g => {
+        s += `<tr><td><b>${g.gop}</b></td><td>${hfLabel(g.gop) || '—'}</td><td class="num">${fmt(g.haeufigkeit)}</td><td class="num" style="color:var(--rust);font-weight:600;">+${g.abweichung.toFixed(0)}</td><td class="num">${g.ansatzPraxen.toFixed(0)}</td></tr>`;
       });
-      s += `</ul>`;
+      s += `</tbody></table>`;
+      if (risk.length > 8) s += `<div class="helper" style="margin-top:4px;">Weitere ${risk.length - 8} in der Detailtabelle unten mit ▲ markiert.</div>`;
+      s += `</div>`;
+    } else {
+      s += `<p><b>Prüfrisiko:</b> Keine GOPs erfüllen alle Kriterien für ein deutliches Prüfrisiko (Häufigkeit ≥ 10, Abw. &gt; +100 %, Verbreitung &lt; 30 %). ✓</p>`;
     }
-    if (neg.length) {
-      s += `<p><b>Stärkste Unterschreitungen (Honorarpotential):</b></p><ul>`;
-      neg.forEach(g => {
-        const lab = HF_LABELS[g.gop] || "";
-        s += `<li><b>${g.gop}</b>${lab ? ` (${lab})` : ""}: ${g.abweichung.toFixed(1)} % unter Schnitt</li>`;
+
+    // ─── AUSBAU-POTENTIAL ────────────────────────────────
+    const pot = hw21.gops.filter(HF_AUSBAUFAEHIG)
+      .sort((a, b) => a.abweichung - b.abweichung);
+    if (pot.length) {
+      s += `<div class="tipp-box" style="border-left-color:var(--amber);background:linear-gradient(to right, var(--amber-pale) 0%, var(--warm-white) 40%);">
+        <div class="tipp-head" style="color:var(--amber);">▼ Ausbau-Potential (${pot.length}) — hier liegt Leistung, die wir seltener abrechnen als der Schnitt</div>
+        <div style="font-size:0.75rem;margin-bottom:6px;">Diese GOPs werden von <b>≥ 80 % der Prüfgruppe</b> abgerechnet, unsere Praxis liegt aber <b>mehr als 50 % unter dem Schnitt</b>. Häufig ein Hinweis auf: Leistungen werden erbracht aber nicht dokumentiert/kodiert, oder es fehlt ein etabliertes Praxisworkflow-Element.</div>
+        <table style="font-size:0.75rem;margin-top:6px;"><thead><tr><th>GOP</th><th>Bezeichnung</th><th class="num">Häufig.</th><th class="num">Abw. %</th><th class="num">Verbr. %</th></tr></thead><tbody>`;
+      pot.slice(0, 8).forEach(g => {
+        s += `<tr><td><b>${g.gop}</b></td><td>${hfLabel(g.gop) || '—'}</td><td class="num">${fmt(g.haeufigkeit)}</td><td class="num" style="color:var(--amber);font-weight:600;">${g.abweichung.toFixed(0)}</td><td class="num">${g.ansatzPraxen.toFixed(0)}</td></tr>`;
       });
-      s += `</ul>`;
-    }
-    const rare = hw21.gops.filter(g => g.haeufigkeit >= 5 && g.ansatzPraxen < 20).sort((a, b) => a.ansatzPraxen - b.ansatzPraxen).slice(0, 3);
-    if (rare.length) {
-      s += `<p><b>Selten in der Prüfgruppe (<20 % Verbreitung, Volumen ≥5):</b> ${rare.map(g => `${g.gop} (${g.ansatzPraxen.toFixed(0)} %)`).join(", ")} — bei diesen ggf. Begründung griffbereit halten.</p>`;
+      s += `</tbody></table>`;
+      if (pot.length > 8) s += `<div class="helper" style="margin-top:4px;">Weitere ${pot.length - 8} in der Detailtabelle unten mit ▼ markiert.</div>`;
+      s += `</div>`;
     }
   }
-  s += `<p class="helper" style="margin-top:10px;">Maschinelle Auswertung Ihrer KVB-Statistik, ersetzt keine offizielle Wirtschaftlichkeitsprüfung. Bei Auffälligkeiten: <a href="https://www.kvb.de/mitglieder/beratung" target="_blank">kvb.de/mitglieder/beratung</a></p>`;
+
+  s += `<p class="helper" style="margin-top:14px;">Diese Auswertung ist eine maschinelle Interpretation der KVB-Statistik und ersetzt keine offizielle Wirtschaftlichkeitsprüfung. Bei Auffälligkeiten oder Beratungsbedarf: <a href="https://www.kvb.de/mitglieder/beratung" target="_blank">kvb.de/mitglieder/beratung</a></p>`;
   return s;
+}
+
+// Kriterien für "prüfungsrelevant zu hoch" und "Ausbaufähig"
+const HF_PRUEFRISIKO = g => g.haeufigkeit >= 10 && g.abweichung > 100 && g.ansatzPraxen < 30;
+const HF_AUSBAUFAEHIG = g => g.ansatzPraxen >= 80 && g.abweichung < -50;
+
+function hfRenderOverviewTrend() {
+  const quarters = hfGetQuarters();
+  const card = document.getElementById("hf-overview-trend-card");
+  if (quarters.length < 2) {
+    // Bei nur einem Quartal: Karte einblenden aber Chart mit Hinweis
+    card.querySelector(".helper").innerHTML = `Sobald ein zweites Quartal hochgeladen ist, wird hier der Verlauf sichtbar. Alte Quartale können jederzeit nachträglich hochgeladen werden — sie werden chronologisch einsortiert.`;
+    const ctx = document.getElementById("chart-hf-overview-trend");
+    ctx.style.display = "none";
+    if (charts["chart-hf-overview-trend"]) { charts["chart-hf-overview-trend"].destroy(); delete charts["chart-hf-overview-trend"]; }
+    return;
+  }
+  card.querySelector(".helper").innerHTML = `Kurative Fallzahl und (falls HW0024 vorhanden) Abweichung zur Prüfgruppe in %. Neue Quartale werden automatisch chronologisch einsortiert — auch nachträglich hochgeladene alte PDFs.`;
+  const ctx = document.getElementById("chart-hf-overview-trend");
+  ctx.style.display = "";
+  const faelle = quarters.map(q => {
+    const { hw21 } = hfGetFor(q);
+    return hw21?.fallzahlen?.kurativ ?? null;
+  });
+  const abw = quarters.map(q => {
+    const { hw24 } = hfGetFor(q);
+    return hw24?.summeKurativ?.abwProz ?? null;
+  });
+  const hasAbw = abw.some(v => v !== null);
+  const datasets = [
+    { label: "Kurative Fälle", data: faelle, yAxisID: "y", color: "#924E7D" },
+  ];
+  if (hasAbw) datasets.push({ label: "Abw. Prüfgruppe %", data: abw, yAxisID: "y1", color: "#B07030", dashed: true });
+  drawLineChart("chart-hf-overview-trend", quarters, datasets,
+    hasAbw ? { dualY: true, yLabel: "Fälle", y1Label: "Abw. %" } : { yLabel: "Fälle" });
 }
 
 function hfRenderKpis(hw21, hw24) {
   const k = [];
   if (hw21?.fallzahlen?.kurativ) k.push({ label: "Kurative Fälle", value: fmt(hw21.fallzahlen.kurativ), cls: "" });
-  if (hw21?.kurativSumme) {
-    k.push({ label: "Honorar kurativ", value: eur(hw21.kurativSumme.gesamtbetrag), cls: "" });
-    k.push({ label: "∅ €/Fall", value: hw21.kurativSumme.euroProFall.toFixed(2) + " €", cls: "success" });
-  }
+  if (hw21?.fallzahlen?.impfungen) k.push({ label: "Impfleistungen", value: fmt(hw21.fallzahlen.impfungen), cls: "" });
+  if (hw21?.fallzahlen?.frueherkennung) k.push({ label: "Früherkennung", value: fmt(hw21.fallzahlen.frueherkennung), cls: "" });
   if (hw24?.summeKurativ) {
     const p = hw24.summeKurativ.abwProz;
     const cls = p > 0 ? "success" : (p < -5 ? "rust" : "amber");
-    k.push({ label: "Abw. Prüfgruppe", value: (p > 0 ? "+" : "") + p.toFixed(1) + " %", cls });
+    k.push({ label: "Abw. Prüfgruppe (gew.)", value: (p > 0 ? "+" : "") + p.toFixed(1) + " %", cls });
   }
-  if (hw21) k.push({ label: "Erfasste GOPs", value: fmt(hw21.gops.length), cls: "" });
+  if (hw21) {
+    const risk = hw21.gops.filter(HF_PRUEFRISIKO).length;
+    const potential = hw21.gops.filter(HF_AUSBAUFAEHIG).length;
+    k.push({ label: "Prüfrisiko-Kandidaten", value: fmt(risk), cls: risk > 0 ? "rust" : "success" });
+    k.push({ label: "Ausbau-Potential", value: fmt(potential), cls: potential > 0 ? "amber" : "success" });
+  }
   document.getElementById("hf-kpi-cards").innerHTML = k.map(c =>
     `<div class="kpi-card ${c.cls}"><div class="kpi-name">${c.label}</div><div class="kpi-value">${c.value}</div></div>`
   ).join("");
@@ -1272,34 +1758,22 @@ function hfRenderLstgr(hw21, hw24) {
   const tbl  = document.getElementById("hf-lstgr-table");
   const chartWrap = document.getElementById("hf-lstgr-chart-wrap");
   if (!hw24) {
-    info.textContent = "HW0024 nicht hochgeladen. Zeige stattdessen LSTGR-Summen aus HW0021.";
-    if (hw21?.lstgrGroups.length) {
-      let html = `<table><thead><tr><th>LSTGR</th><th>Bezeichnung</th><th class="num">Häufigkeit</th><th class="num">Gesamt €</th><th class="num">∅ €/Fall</th></tr></thead><tbody>`;
-      hw21.lstgrGroups.forEach(g => {
-        html += `<tr><td>${g.code}</td><td>${g.bezeichnung}</td><td class="num">${fmt(g.haeufigkeit)}</td><td class="num">${eur(g.gesamtbetrag)}</td><td class="num">${g.euroProFall.toFixed(2)}</td></tr>`;
-      });
-      html += `</tbody></table>`;
-      tbl.innerHTML = html;
-    } else tbl.innerHTML = `<div class="empty">Keine LSTGR-Daten verfügbar.</div>`;
+    info.textContent = "HW0024 (Gesamtübersicht) für dieses Quartal nicht hochgeladen. LSTGR-Vergleich zur Prüfgruppe wird sichtbar, sobald das HW0024-PDF verfügbar ist.";
+    tbl.innerHTML = "";
     chartWrap.style.display = "none";
     if (charts["chart-hf-lstgr"]) { charts["chart-hf-lstgr"].destroy(); delete charts["chart-hf-lstgr"]; }
     return;
   }
   chartWrap.style.display = "";
-  info.innerHTML = `Vergleich Praxis (PG) vs. <b>gewichteter Prüfgruppen-Schnitt</b> (Spalte 9 im HW0024). "Gew." berücksichtigt Versichertenanteile der Altersgruppen.`;
+  info.innerHTML = `Abweichung der Praxis vom <b>gewichteten Prüfgruppen-Schnitt</b> (Spalte 9 im HW0024). "Gewichtet" berücksichtigt die Alters-/Versichertenstruktur der Praxis.`;
   let html = `<table><thead><tr>
-    <th>LSTGR</th><th>Bezeichnung</th><th class="num">Gesamt €</th>
-    <th class="num">∅ Praxis</th><th class="num">∅ PG</th><th class="num">∅ PG gew.</th>
-    <th class="num">Abw. €</th><th class="num">Abw. %</th>
+    <th>LSTGR</th><th>Bezeichnung</th><th class="num">Abw. zur Prüfgruppe</th>
   </tr></thead><tbody>`;
   const sorted = [...hw24.lstgr].sort((a, b) => Math.abs(b.abwProz) - Math.abs(a.abwProz));
   sorted.forEach(l => {
     const col = l.abwProz > 0 ? "var(--success)" : (l.abwProz < -10 ? "var(--rust)" : "var(--amber)");
     html += `<tr><td>${l.code}</td><td><b>${l.bezeichnung}</b></td>
-      <td class="num">${eur(l.gesamt)}</td><td class="num">${l.praxisProFall.toFixed(2)}</td>
-      <td class="num">${l.pgProFall.toFixed(2)}</td><td class="num">${l.pggewProFall.toFixed(2)}</td>
-      <td class="num" style="color:${col};">${l.abwEur > 0 ? "+" : ""}${l.abwEur.toFixed(2)}</td>
-      <td class="num" style="color:${col};font-weight:600;">${l.abwProz > 0 ? "+" : ""}${l.abwProz.toFixed(2)} %</td></tr>`;
+      <td class="num" style="color:${col};font-weight:600;">${l.abwProz > 0 ? "+" : ""}${l.abwProz.toFixed(1)} %</td></tr>`;
   });
   html += `</tbody></table>`;
   tbl.innerHTML = html;
@@ -1339,7 +1813,7 @@ function hfRenderDeviation(hw21) {
     charts["chart-hf-deviation"] = new Chart(ctx, {
       type: "bar",
       data: {
-        labels: s.map(g => `${g.gop}${HF_LABELS[g.gop] ? ' — ' + HF_LABELS[g.gop] : ''}`),
+        labels: s.map(g => `${g.gop}${hfLabel(g.gop) ? ' — ' + hfLabel(g.gop) : ''}`),
         datasets: [{
           label: "Abw. %", data: s.map(g => g.abweichung),
           backgroundColor: s.map(g => g.abweichung >= 0 ? "#924E7D" : "#B04A35"),
@@ -1366,7 +1840,7 @@ function hfRenderSpread(hw21) {
     if (!rows.length) return `<div class="helper">Keine auffälligen Ziffern.</div>`;
     let h = `<table><thead><tr><th>GOP</th><th class="num">Häufig.</th><th class="num">Verbr.%</th><th class="num">Abw.%</th></tr></thead><tbody>`;
     rows.forEach(g => {
-      h += `<tr><td>${g.gop}${HF_LABELS[g.gop] ? `<br><span style="font-size:0.7rem;color:var(--warm-muted);">${HF_LABELS[g.gop]}</span>` : ''}</td><td class="num">${fmt(g.haeufigkeit)}</td><td class="num">${g.ansatzPraxen.toFixed(1)}</td><td class="num">${g.abweichung.toFixed(0)}</td></tr>`;
+      h += `<tr><td>${g.gop}${hfLabel(g.gop) ? `<br><span style="font-size:0.7rem;color:var(--warm-muted);">${hfLabel(g.gop)}</span>` : ''}</td><td class="num">${fmt(g.haeufigkeit)}</td><td class="num">${g.ansatzPraxen.toFixed(1)}</td><td class="num">${g.abweichung.toFixed(0)}</td></tr>`;
     });
     return h + `</tbody></table>`;
   }
@@ -1404,21 +1878,27 @@ function hfRenderDetail(hw21) {
     const s = sortList(apply(hw21.gops));
     let html = `<table><thead><tr>
       <th style="cursor:pointer;" data-sort="gop">GOP${hfSortCol === "gop" ? (hfSortDir === "asc" ? " ▲" : " ▼") : ""}</th>
-      <th>Bezeichnung</th>${th("haeufigkeit", "Häufig.")}${th("wertEuro", "Wert €")}
-      ${th("gesamtbetrag", "Gesamt €")}${th("euroProFall", "€/Fall")}${th("euroProFallPG", "€/Fall PG")}
-      ${th("abweichung", "Abw. %")}${th("ansatzPraxen", "Verbr. %")}
+      <th>Bezeichnung</th>${th("haeufigkeit", "Häufigkeit")}
+      ${th("abweichung", "Abw. %")}${th("ansatzPraxen", "Verbreitung in Prüfgruppe %")}
     </tr></thead><tbody>`;
     s.forEach(g => {
-      const c = g.abweichung > 50 ? "var(--success)" : (g.abweichung < -50 ? "var(--rust)" : "");
-      html += `<tr><td><b>${g.gop}</b></td>
-        <td style="font-size:0.7rem;color:var(--warm-muted);">${HF_LABELS[g.gop] || ""}</td>
-        <td class="num">${fmt(g.haeufigkeit)}</td><td class="num">${g.wertEuro.toFixed(2)}</td>
-        <td class="num">${eur(g.gesamtbetrag)}</td><td class="num">${g.euroProFall.toFixed(2)}</td>
-        <td class="num">${g.euroProFallPG.toFixed(2)}</td>
+      const isRisk = HF_PRUEFRISIKO(g);
+      const isPot  = HF_AUSBAUFAEHIG(g);
+      const c = isRisk ? "var(--rust)" : (isPot ? "var(--amber)" : "");
+      const marker = isRisk ? '<span title="Prüfrisiko: hoch über Schnitt, wenige Prüfgruppenmitglieder rechnen es ab" style="color:var(--rust);font-size:0.7rem;margin-left:4px;">▲</span>' :
+                     isPot  ? '<span title="Ausbau-Potential: fast alle rechnen es ab, wir liegen deutlich darunter" style="color:var(--amber);font-size:0.7rem;margin-left:4px;">▼</span>' : '';
+      html += `<tr><td><b>${g.gop}</b>${marker}</td>
+        <td style="font-size:0.72rem;">${hfLabel(g.gop) || '<span style="color:var(--warm-muted);font-style:italic;">—</span>'}</td>
+        <td class="num">${fmt(g.haeufigkeit)}</td>
         <td class="num" style="color:${c};font-weight:${c ? '600' : '400'};">${g.abweichung > 0 ? "+" : ""}${g.abweichung.toFixed(1)}</td>
         <td class="num">${g.ansatzPraxen.toFixed(1)}</td></tr>`;
     });
-    html += `</tbody></table><div class="helper" style="margin-top:6px;">${s.length} von ${hw21.gops.length} GOPs angezeigt</div>`;
+    html += `</tbody></table>
+      <div class="helper" style="margin-top:8px;">
+        ${s.length} von ${hw21.gops.length} GOPs angezeigt.
+        <span style="color:var(--rust);">▲</span> = Prüfrisiko-Kandidat (Häufigkeit ≥ 10 · Abw. > +100 % · Verbreitung Prüfgruppe < 30 %).
+        <span style="color:var(--amber);">▼</span> = Ausbau-Potential (Verbreitung ≥ 80 % · Abw. < −50 %).
+      </div>`;
     wrap.innerHTML = html;
     wrap.querySelectorAll("th[data-sort]").forEach(th => {
       th.onclick = () => {
@@ -1437,7 +1917,7 @@ function hfRenderTrendSelect(hw21) {
   const helper = document.getElementById("hf-gop-trend-helper");
   if (!hw21) { sel.innerHTML = ""; return; }
   const codes = [...new Set(hfData.filter(d => d.type === "HW0021").flatMap(d => d.gops.map(g => g.gop)))].sort();
-  sel.innerHTML = codes.map(c => `<option value="${c}">${c}${HF_LABELS[c] ? ' — ' + HF_LABELS[c] : ''}</option>`).join("");
+  sel.innerHTML = codes.map(c => `<option value="${c}">${c}${hfLabel(c) ? ' — ' + hfLabel(c) : ''}</option>`).join("");
   const top = [...hw21.gops].filter(g => g.haeufigkeit >= 10).sort((a, b) => Math.abs(b.abweichung) - Math.abs(a.abweichung))[0];
   if (top) sel.value = top.gop;
   function draw() {
