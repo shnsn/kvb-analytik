@@ -1,0 +1,1612 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <title>KVB-Analytik · Gemeinschaftspraxis</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <style>
+    /* ══ PRAXISFARBEN ═══════════════════════════════════════ */
+    :root {
+      --praxis:        #924E7D;
+      --primary:       #A86098;
+      --primary-dark:  #6B3860;
+      --primary-light: #C08AB4;
+      --primary-pale:  #FFFFFF;
+      --primary-bg:    #EDD8E8;
+      --warm-white:    #FFFFFF;
+      --warm-border:   #E4D3DF;
+      --warm-muted:    #8A7082;
+      --text:          #2C2030;
+      --text-light:    #5C4E58;
+      --success:       #3D7A4A;
+      --success-pale:  #E6F4EA;
+      --amber:         #B07030;
+      --amber-pale:    #FDF3E3;
+      --rust:          #B04A35;
+      --rust-pale:     #FAEAE7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--primary-pale);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+    }
+    /* ══ PAT MODAL ══════════════════════════════════════════ */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.52); z-index: 999;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal-box {
+      background: #fff; border-radius: 14px; padding: 28px 30px;
+      max-width: 460px; width: calc(100% - 40px);
+      box-shadow: 0 12px 48px rgba(0,0,0,0.22);
+    }
+    .modal-box h3 { font-size: 1rem; font-weight: 700; color: var(--primary-dark); margin-bottom: 6px; }
+    .modal-box p { font-size: 0.78rem; color: var(--warm-muted); margin-bottom: 16px; line-height: 1.5; }
+    .modal-box input[type="password"], .modal-box input[type="text"] {
+      width: 100%; border: 1.5px solid var(--warm-border); border-radius: 8px;
+      padding: 9px 12px; font-size: 0.88rem; font-family: monospace;
+      color: var(--text); background: #fafafa; outline: none; margin-bottom: 14px;
+    }
+    .modal-box input:focus { border-color: var(--primary); background: #fff; }
+    .modal-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+    .modal-btns button {
+      padding: 7px 16px; border-radius: 7px; border: none;
+      font-size: 0.8rem; font-weight: 600; cursor: pointer;
+    }
+    .btn-primary { background: var(--praxis); color: #fff; }
+    .btn-primary:hover { background: var(--primary-dark); }
+    .btn-secondary { background: var(--primary-bg); color: var(--primary-dark); }
+    .btn-secondary:hover { background: #DFC7DB; }
+    .btn-danger { background: var(--rust-pale); color: var(--rust); }
+    .btn-danger:hover { background: #f5d3cc; }
+    .modal-status { margin-top: 12px; font-size: 0.75rem; min-height: 1.2em; }
+    .status-ok  { color: var(--success); font-weight: 600; }
+    .status-err { color: var(--rust);    font-weight: 600; }
+    /* ══ HEADER ═════════════════════════════════════════════ */
+    header {
+      background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 100%);
+      color: #fff; padding: 20px 28px;
+    }
+    .header-inner {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      flex-wrap: wrap; gap: 14px;
+    }
+    .header-brand { display: flex; align-items: center; gap: 14px; }
+    .brand-icon { width: 36px; height: 36px; flex-shrink: 0; opacity: 0.92; }
+    .header-title h1 { font-size: 1.1rem; font-weight: 700; letter-spacing: -0.2px; line-height: 1.2; }
+    .header-title p  { font-size: 0.72rem; opacity: 0.7; margin-top: 3px; }
+    .header-controls { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+    .gh-config-btn {
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+      color: #fff; border-radius: 7px; padding: 6px 13px;
+      font-size: 0.78rem; font-weight: 600; cursor: pointer; white-space: nowrap;
+      transition: background 0.15s;
+    }
+    .gh-config-btn:hover { background: rgba(255,255,255,0.25); }
+    .gh-config-btn.connected { background: rgba(61,122,74,0.45); border-color: rgba(100,200,120,0.5); }
+    .readonly-badge {
+      display: none; font-size: 0.68rem; background: rgba(255,255,255,0.18);
+      border: 1px solid rgba(255,255,255,0.3); color: rgba(255,255,255,0.85);
+      border-radius: 6px; padding: 3px 10px; font-weight: 600;
+    }
+    body.readonly .readonly-badge { display: inline-block; }
+    body.readonly .edit-only { display: none !important; }
+    /* ══ TABS ═══════════════════════════════════════════════ */
+    .tab-nav {
+      background: var(--warm-white);
+      border-top: 3px solid var(--praxis);
+      border-bottom: 1px solid var(--warm-border);
+      padding: 0 28px;
+      display: flex; gap: 4px;
+    }
+    .tab-btn {
+      background: transparent; border: none; padding: 14px 20px;
+      font-size: 0.88rem; font-weight: 600; color: var(--warm-muted);
+      cursor: pointer; border-bottom: 3px solid transparent;
+      margin-bottom: -1px; transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn:hover { color: var(--primary-dark); }
+    .tab-btn.active { color: var(--primary-dark); border-bottom-color: var(--praxis); }
+    /* ══ MAIN ═══════════════════════════════════════════════ */
+    main { padding: 20px 28px 36px; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+    .section-label {
+      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.12em;
+      color: var(--warm-muted); margin: 22px 0 12px 0; padding-left: 2px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .section-label::after { content: ''; flex: 1; height: 1px; background: var(--warm-border); }
+    /* ══ DROP ZONE ══════════════════════════════════════════ */
+    .drop-zone {
+      background: var(--warm-white); border: 2px dashed var(--warm-border);
+      border-radius: 12px; padding: 34px 20px; text-align: center;
+      cursor: pointer; transition: all 0.2s;
+    }
+    .drop-zone:hover, .drop-zone.dragover {
+      border-color: var(--praxis); background: var(--primary-bg);
+    }
+    .drop-zone .drop-icon {
+      font-size: 40px; color: var(--praxis); margin-bottom: 8px;
+    }
+    .drop-zone .drop-title { font-size: 0.95rem; font-weight: 600; color: var(--text); margin-bottom: 4px; }
+    .drop-zone .drop-hint { font-size: 0.75rem; color: var(--warm-muted); }
+    .drop-status { margin-top: 12px; font-size: 0.8rem; min-height: 1.2em; }
+    /* ══ CARDS ══════════════════════════════════════════════ */
+    .summary-card {
+      background: var(--warm-white); border: 1px solid var(--warm-border);
+      border-left: 3px solid var(--primary); border-radius: 10px;
+      padding: 16px 18px; margin-bottom: 22px;
+      font-size: 0.85rem; line-height: 1.65; color: var(--text);
+    }
+    .summary-card h3 {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--warm-muted); margin-bottom: 8px; font-weight: 700;
+    }
+    .summary-card p { margin-bottom: 8px; }
+    .summary-card ul { margin: 6px 0 10px 20px; }
+    .summary-card li { margin-bottom: 3px; }
+    .summary-card a { color: var(--praxis); text-decoration: none; font-weight: 600; }
+    .summary-card a:hover { text-decoration: underline; }
+    .kpi-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px; margin-bottom: 22px;
+    }
+    .kpi-card {
+      background: var(--warm-white); border: 1px solid var(--warm-border);
+      border-top: 3px solid var(--primary-light); border-radius: 12px;
+      padding: 16px; box-shadow: 0 1px 6px rgba(146,78,125,0.06);
+    }
+    .kpi-card.success { border-top-color: var(--success); }
+    .kpi-card.amber { border-top-color: var(--amber); }
+    .kpi-card.rust { border-top-color: var(--rust); }
+    .kpi-name {
+      font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--warm-muted); margin-bottom: 6px; font-weight: 700;
+    }
+    .kpi-value {
+      font-size: 1.75rem; font-weight: 800; color: var(--primary-dark); line-height: 1;
+    }
+    .kpi-hint { font-size: 0.7rem; color: var(--warm-muted); margin-top: 4px; }
+    .chart-card {
+      background: var(--warm-white); border: 1px solid var(--warm-border);
+      border-radius: 12px; padding: 18px; margin-bottom: 16px;
+    }
+    .chart-card h2 {
+      font-size: 0.85rem; font-weight: 700; color: var(--primary-dark);
+      margin-bottom: 12px;
+    }
+    .chart-wrap { position: relative; height: 320px; }
+    /* ══ TABLES ═════════════════════════════════════════════ */
+    table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+    th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid var(--warm-border); }
+    th {
+      background: var(--primary-bg); color: var(--primary-dark);
+      font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+    }
+    td.num { text-align: right; font-variant-numeric: tabular-nums; }
+    tr:hover td { background: rgba(237,216,232,0.35); }
+    /* ══ PILLS / BADGES ═════════════════════════════════════ */
+    .pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 0.7rem; font-weight: 600;
+    }
+    .pill-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .pill-green  { background: var(--success-pale); color: var(--success); }
+    .pill-amber  { background: var(--amber-pale);   color: var(--amber); }
+    .pill-rust   { background: var(--rust-pale);    color: var(--rust); }
+    .pill-neutral{ background: var(--primary-bg);   color: var(--primary-dark); }
+    /* ══ BUTTONS ════════════════════════════════════════════ */
+    .btn {
+      background: var(--praxis); color: #fff; border: none;
+      padding: 8px 16px; border-radius: 7px;
+      font-size: 0.82rem; font-weight: 600; cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: var(--primary-dark); }
+    .btn.secondary { background: var(--primary-bg); color: var(--primary-dark); }
+    .btn.secondary:hover { background: #DFC7DB; }
+    .btn.small { padding: 5px 10px; font-size: 0.72rem; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+    /* ══ EMPTY / HELPER ═════════════════════════════════════ */
+    .empty {
+      text-align: center; padding: 50px 20px; color: var(--warm-muted); font-style: italic;
+    }
+    .helper { font-size: 0.72rem; color: var(--warm-muted); margin-top: 4px; }
+    .quarter-select {
+      display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .quarter-select select {
+      padding: 6px 10px; border: 1px solid var(--warm-border);
+      border-radius: 6px; font-size: 0.85rem; color: var(--text); background: #fff;
+    }
+    .warning-box {
+      background: var(--amber-pale); border-left: 3px solid var(--amber);
+      color: var(--text); padding: 10px 14px; border-radius: 6px;
+      font-size: 0.78rem; margin-bottom: 12px;
+    }
+    .info-box {
+      background: var(--primary-bg); border-left: 3px solid var(--primary);
+      color: var(--text); padding: 10px 14px; border-radius: 6px;
+      font-size: 0.78rem; margin-bottom: 12px;
+    }
+    details { margin-top: 10px; }
+    summary {
+      cursor: pointer; font-size: 0.78rem; color: var(--praxis);
+      font-weight: 600; padding: 4px 0;
+    }
+    /* ══ RESPONSIVE ═════════════════════════════════════════ */
+    @media (max-width: 600px) {
+      header { padding: 16px 18px; }
+      .tab-nav { padding: 0 14px; }
+      .tab-btn { padding: 12px 14px; font-size: 0.8rem; }
+      main { padding: 16px 14px 28px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════ PAT MODAL ═══════════ -->
+<div class="modal-overlay" id="patModal">
+  <div class="modal-box">
+    <h3>GitHub-Integration (optional)</h3>
+    <p>Personal Access Token (PAT) mit <code>repo</code>-Schreibrecht für <strong>shnsn/kvb-analytik</strong>.
+       Damit werden Deine Auswertungen für andere Teammitglieder sichtbar. Ohne PAT läuft alles lokal im Browser.</p>
+    <input type="password" id="patInput" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off">
+    <div class="modal-btns">
+      <button class="btn-primary" onclick="doSavePat()">Speichern &amp; verbinden</button>
+      <button class="btn-secondary" onclick="closePatModal()">Abbrechen</button>
+      <button class="btn-danger" onclick="doClearPat()">PAT entfernen</button>
+    </div>
+    <div class="modal-status" id="patStatus"></div>
+  </div>
+</div>
+
+<!-- ═══════════ HEADER ═══════════ -->
+<header>
+  <div class="header-inner">
+    <div class="header-brand">
+      <svg class="brand-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18 3 C12 10, 7 13, 9 18 C11 22, 14 20, 18 22 C22 20, 25 22, 27 18 C29 13, 24 10, 18 3Z" fill="rgba(255,255,255,0.7)"/>
+        <path d="M18 10 C14 15, 10 17, 12 21 C14 24, 16 22, 18 24 C20 22, 22 24, 24 21 C26 17, 22 15, 18 10Z" fill="rgba(255,255,255,0.5)"/>
+        <rect x="16" y="24" width="4" height="9" rx="2" fill="rgba(255,255,255,0.6)"/>
+      </svg>
+      <div class="header-title">
+        <h1>KVB-Analytik</h1>
+        <p>Gollierplatz · Romanplatz &nbsp;·&nbsp; WSV-Trendmeldung &amp; Häufigkeitsstatistik &nbsp;·&nbsp; <span id="lastSavedDisplay">–</span></p>
+      </div>
+    </div>
+    <div class="header-controls">
+      <button class="gh-config-btn edit-only" id="ghBtn" onclick="openPatModal()">⚙ GitHub</button>
+      <span class="readonly-badge">📖 Nur-Lese-Ansicht</span>
+    </div>
+  </div>
+</header>
+
+<!-- ═══════════ TABS ═══════════ -->
+<div class="tab-nav">
+  <button class="tab-btn active" data-tab="wsv">AM-Trendmeldung (WSV)</button>
+  <button class="tab-btn" data-tab="haeuf">Häufigkeitsstatistik</button>
+</div>
+
+<!-- ═══════════ MAIN ═══════════ -->
+<main>
+
+  <!-- ─── TAB: WSV ─────────────────────────── -->
+  <div class="panel active" id="tab-wsv">
+    <div class="info-box">
+      <b>Was ist das?</b> Die Wirkstoffvereinbarung (WSV) der KVB Bayern ist das zentrale Steuerungsinstrument
+      für die wirtschaftliche Arzneimittel-Verordnung. Sie erhalten quartalsweise eine Modell-Trendmeldung
+      als PDF. Hier hochladen — die Daten werden im Browser ausgelesen (keine Cloud).
+    </div>
+
+    <div class="edit-only">
+      <div class="section-label">PDF hochladen</div>
+      <div class="drop-zone" id="wsv-drop">
+        <div class="drop-icon">⬆</div>
+        <div class="drop-title">Modell-Trendmeldung WSV 3.0 hier ablegen</div>
+        <div class="drop-hint">oder klicken zum Auswählen &nbsp;·&nbsp; nur .pdf</div>
+        <input type="file" id="wsv-file" accept="application/pdf" style="display:none;">
+      </div>
+      <div class="drop-status" id="wsv-status"></div>
+
+      <div id="wsv-preview" style="display:none;">
+        <div class="section-label">Vorschau — vor dem Übernehmen prüfen</div>
+        <div class="chart-card">
+          <div id="wsv-preview-content"></div>
+          <div class="btn-row">
+            <button class="btn" onclick="wsvSave()">In Dashboard übernehmen</button>
+            <button class="btn secondary" onclick="wsvCancel()">Verwerfen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="wsv-empty" class="empty">Noch keine WSV-Trendmeldung erfasst. Laden Sie oben Ihr erstes PDF hoch.</div>
+
+    <div id="wsv-results" style="display:none;">
+      <div class="quarter-select">
+        <span class="section-label" style="margin:0;padding:0;">Quartal:</span>
+        <select id="wsv-quarter-select"></select>
+        <span id="wsv-source-info" style="font-size:0.72rem;color:var(--warm-muted);"></span>
+      </div>
+
+      <div class="summary-card">
+        <h3>Klartext-Zusammenfassung</h3>
+        <div id="wsv-summary"></div>
+      </div>
+
+      <div class="section-label">Ampel-Bilanz</div>
+      <div class="kpi-grid" id="wsv-ampel-cards"></div>
+
+      <div class="chart-card">
+        <h2>Gesamtergebnis WSV im Verlauf</h2>
+        <div class="chart-wrap"><canvas id="chart-wsv-gesamt"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>Detail je Wirkstoffziel — aktuelles Quartal</h2>
+        <div id="wsv-detail-table"></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>Verlauf einzelner Ziele</h2>
+        <div style="margin-bottom:8px;">
+          <label style="font-size:0.75rem;color:var(--warm-muted);">Ziel auswählen:</label>
+          <select id="wsv-ziel-select" style="padding:5px 10px;border:1px solid var(--warm-border);border-radius:6px;font-size:0.82rem;margin-left:8px;"></select>
+        </div>
+        <div class="chart-wrap"><canvas id="chart-wsv-ziel"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── TAB: HÄUFIGKEIT ──────────────────── -->
+  <div class="panel" id="tab-haeuf">
+    <div class="info-box">
+      <b>Was ist das?</b> Die KVB-Prüfungsstelle liefert quartalsweise zwei PDFs:
+      <b>HW0021 Häufigkeitsstatistik</b> (jede GOP einzeln, mit Vergleich zur Prüfgruppe) und
+      <b>HW0024 Gesamtübersicht</b> (Aggregate nach Leistungsgruppen und Altersgruppen).
+      Beide hier hochladen — Analyse und Klartext-Zusammenfassung erfolgen im Browser.
+    </div>
+
+    <div class="edit-only">
+      <div class="section-label">PDFs hochladen (HW0021 und/oder HW0024)</div>
+      <div class="drop-zone" id="hf-drop">
+        <div class="drop-icon">⬆</div>
+        <div class="drop-title">HW0021 &amp; HW0024 hier ablegen (Mehrfachauswahl)</div>
+        <div class="drop-hint">wird automatisch erkannt · nur .pdf</div>
+        <input type="file" id="hf-file" accept="application/pdf" multiple style="display:none;">
+      </div>
+      <div class="drop-status" id="hf-status"></div>
+
+      <div id="hf-preview" style="display:none;">
+        <div class="section-label">Vorschau — vor dem Übernehmen prüfen</div>
+        <div class="chart-card">
+          <div id="hf-preview-content"></div>
+          <div class="btn-row">
+            <button class="btn" onclick="hfSave()">In Dashboard übernehmen</button>
+            <button class="btn secondary" onclick="hfCancel()">Verwerfen</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="hf-empty" class="empty">Noch keine Häufigkeitsstatistik erfasst. Laden Sie oben HW0021 und/oder HW0024 hoch.</div>
+
+    <div id="hf-results" style="display:none;">
+      <div class="quarter-select">
+        <span class="section-label" style="margin:0;padding:0;">Quartal:</span>
+        <select id="hf-quarter-select"></select>
+        <span id="hf-source-info" style="font-size:0.72rem;color:var(--warm-muted);"></span>
+      </div>
+
+      <div class="summary-card">
+        <h3>Klartext-Zusammenfassung</h3>
+        <div id="hf-summary"></div>
+      </div>
+
+      <div class="section-label">Kennzahlen</div>
+      <div class="kpi-grid" id="hf-kpi-cards"></div>
+
+      <div class="chart-card" id="hf-lstgr-section">
+        <h2>Leistungsgruppen-Bilanz</h2>
+        <div id="hf-lstgr-info" class="helper" style="margin-bottom:8px;"></div>
+        <div id="hf-lstgr-table"></div>
+        <div class="chart-wrap" id="hf-lstgr-chart-wrap" style="height:360px;margin-top:16px;">
+          <canvas id="chart-hf-lstgr"></canvas>
+        </div>
+      </div>
+
+      <div class="chart-card">
+        <h2>Top-Auffälligkeiten zur Prüfgruppe (Spalte 12)</h2>
+        <div class="helper" style="margin-bottom:8px;">
+          Positive Werte = Praxis liegt über dem gewichteten Prüfgruppen-Schnitt (€/Fall).
+          Nur GOPs mit Häufigkeit ≥ 10 werden gezeigt.
+        </div>
+        <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:10px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;cursor:pointer;">
+            <input type="radio" name="hf-dev-dir" value="positive" checked> oberhalb (Honorarstärke)
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:0.78rem;cursor:pointer;">
+            <input type="radio" name="hf-dev-dir" value="negative"> unterhalb (Potential)
+          </label>
+        </div>
+        <div class="chart-wrap" style="height:420px;"><canvas id="chart-hf-deviation"></canvas></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>Verbreitungsanalyse (Spalte 13)</h2>
+        <div class="helper" style="margin-bottom:8px;">
+          <b>Links (Prüfrisiko):</b> Ziffern, die in der Prüfgruppe kaum abgerechnet werden. &nbsp;
+          <b>Rechts (Potential):</b> Ziffern, die fast alle abrechnen — Du aber unterdurchschnittlich.
+        </div>
+        <div id="hf-spread-tables" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;"></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>Alle GOPs (HW0021)</h2>
+        <div style="margin-bottom:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="hf-filter" placeholder="Filter: GOP oder min. Häufigkeit"
+                 style="padding:6px 10px;border:1px solid var(--warm-border);border-radius:6px;font-size:0.8rem;width:240px;">
+          <span class="helper">Klick auf Spaltenkopf zum Sortieren</span>
+        </div>
+        <div id="hf-detail-table" style="max-height:520px;overflow:auto;"></div>
+      </div>
+
+      <div class="chart-card">
+        <h2>Quartalsverlauf einzelner GOPs</h2>
+        <div style="margin-bottom:8px;">
+          <label style="font-size:0.75rem;color:var(--warm-muted);">GOP auswählen:</label>
+          <select id="hf-gop-select" style="padding:5px 10px;border:1px solid var(--warm-border);border-radius:6px;font-size:0.82rem;margin-left:8px;"></select>
+          <span class="helper" id="hf-gop-trend-helper" style="margin-left:8px;"></span>
+        </div>
+        <div class="chart-wrap"><canvas id="chart-hf-gop-trend"></canvas></div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// ══════════════════════════════════════════════════════════════
+// KONFIGURATION
+// ══════════════════════════════════════════════════════════════
+const GH_OWNER = 'shnsn';
+const GH_REPO  = 'kvb-analytik';
+const GH_FILE  = 'data.json';
+const GH_API   = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${GH_FILE}`;
+const PAT_KEY  = 'kvb_analytik_pat';
+const WSV_KEY  = 'kvb_analytik_wsv_v1';
+const HF_KEY   = 'kvb_analytik_hf_v1';
+
+const IS_READONLY = new URLSearchParams(window.location.search).has('readonly');
+if (IS_READONLY) document.body.classList.add('readonly');
+
+if (typeof pdfjsLib !== "undefined") {
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+}
+
+// ══════════════════════════════════════════════════════════════
+// GLOBAL STATE
+// ══════════════════════════════════════════════════════════════
+let wsvData = JSON.parse(localStorage.getItem(WSV_KEY) || "[]");
+let hfData  = JSON.parse(localStorage.getItem(HF_KEY)  || "[]");
+let wsvPending = null;
+let hfPending  = [];
+let wsvCurrentQuarter = null;
+let hfCurrentQuarter  = null;
+let ghSha = null;
+let charts = {};
+
+// ══════════════════════════════════════════════════════════════
+// UTIL
+// ══════════════════════════════════════════════════════════════
+function fmt(n, decimals = 0) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  return n.toLocaleString("de-DE", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+function eur(n) {
+  return n === null || n === undefined || isNaN(n) ? "—" :
+    n.toLocaleString("de-DE", { style: "currency", currency: "EUR", maximumFractionDigits: 0 });
+}
+function parseGerNum(s) { if (s == null) return NaN; return parseFloat(String(s).replace(/\./g, "").replace(",", ".")); }
+function parseGerInt(s) { if (s == null) return NaN; return parseInt(String(s).replace(/\./g, "")); }
+
+async function extractPdfText(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let text = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    text += tc.items.map(it => it.str).join(" ") + "\n";
+  }
+  return text;
+}
+
+async function extractPdfTextRowAware(file) {
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+  let allText = "";
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const tc = await page.getTextContent();
+    const rows = new Map();
+    for (const item of tc.items) {
+      if (!item.transform) continue;
+      const y = Math.round(item.transform[5] / 2) * 2;
+      const x = item.transform[4];
+      if (!rows.has(y)) rows.set(y, []);
+      rows.get(y).push({ x, str: item.str });
+    }
+    const sortedRows = [...rows.entries()].sort((a, b) => b[0] - a[0]);
+    for (const [, items] of sortedRows) {
+      items.sort((a, b) => a.x - b.x);
+      allText += items.map(it => it.str).join(" ") + "\n";
+    }
+    allText += "\n";
+  }
+  return allText;
+}
+
+// ══════════════════════════════════════════════════════════════
+// TABS
+// ══════════════════════════════════════════════════════════════
+document.querySelectorAll(".tab-btn").forEach(b => {
+  b.addEventListener("click", () => {
+    document.querySelectorAll(".tab-btn").forEach(x => x.classList.remove("active"));
+    document.querySelectorAll(".panel").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    document.getElementById("tab-" + b.dataset.tab).classList.add("active");
+    if (b.dataset.tab === "wsv")   renderWsv();
+    if (b.dataset.tab === "haeuf") renderHaeuf();
+  });
+});
+
+// ══════════════════════════════════════════════════════════════
+// CHART HELPER
+// ══════════════════════════════════════════════════════════════
+function drawLineChart(canvasId, labels, datasets, opts = {}) {
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  if (charts[canvasId]) charts[canvasId].destroy();
+  const ds = datasets.map(d => ({
+    label: d.label, data: d.data,
+    borderColor: d.color, backgroundColor: d.color + "20",
+    borderWidth: 2, borderDash: d.dashed ? [6, 4] : [],
+    tension: 0.2, pointRadius: 3,
+    yAxisID: d.yAxisID || "y", spanGaps: true,
+  }));
+  const scales = { y: { beginAtZero: false, title: { display: !!opts.yLabel, text: opts.yLabel || "" } } };
+  if (opts.dualY) {
+    scales.y1 = { position: "right", beginAtZero: false, grid: { drawOnChartArea: false },
+                  title: { display: !!opts.y1Label, text: opts.y1Label || "" } };
+  }
+  charts[canvasId] = new Chart(ctx, {
+    type: "line", data: { labels, datasets: ds },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } },
+      scales,
+    },
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// WSV — WIRKSTOFFVEREINBARUNG (Bayern)
+// ══════════════════════════════════════════════════════════════
+const WSV_GROUPS = [
+  { nr: "1.1", category: "Generikaziel", name: "Migräne-Mittel (Triptane)", anchor: "Prophylaxe der Migräne" },
+  { nr: "3",   category: "Generikaziel", name: "Antidiabetika ohne Insuline", anchor: "Antidiabetika ohne" },
+  { nr: "4",   category: "Generikaziel", name: "Antiepileptika", anchor: "Antiepileptika" },
+  { nr: "7",   category: "Generikaziel", name: "Antiparkinsonmittel", anchor: "Antiparkinsonmittel" },
+  { nr: "8",   category: "Generikaziel", name: "Antiphlogistika (NSAR)", anchor: "Antiphlogistika" },
+  { nr: "9",   category: "Generikaziel", name: "BtM-pflichtige Opioide", anchor: "BtM-pflichtige Opioide" },
+  { nr: "13",  category: "Generikaziel", name: "Kombi kardiovaskulär", anchor: "Kombigruppe" },
+  { nr: "14",  category: "Generikaziel", name: "Lipidsenker", anchor: "Lipidsenker" },
+  { nr: "15",  category: "Generikaziel", name: "Atemwege (obstruktiv)", anchor: "obstruktiven" },
+  { nr: "17",  category: "Generikaziel", name: "Ophthalmika", anchor: "Ophthalmika" },
+  { nr: "18.1",category: "Generikaziel", name: "Psychoanaleptika", anchor: "Psychoanaleptika" },
+  { nr: "19",  category: "Generikaziel", name: "Psycholeptika", anchor: "Psycholeptika" },
+  { nr: "20",  category: "Generikaziel", name: "RAS-System", anchor: "RAS-System" },
+  { nr: "22",  category: "Generikaziel", name: "Sexualhormone", anchor: "Sexualhormone" },
+  { nr: "23",  category: "Generikaziel", name: "Thrombozytenaggregationshemmer", anchor: "Thrombozyten" },
+  { nr: "26.2",category: "Generikaziel", name: "DOAK", anchor: "DOAK" },
+  { nr: "2",   category: "Leitsubstanzziel", name: "Antibiotika", anchor: "Antibiotika" },
+  { nr: "10",  category: "Leitsubstanzziel", name: "Systemische Corticoide", anchor: "Systemische Corticoide" },
+  { nr: "16",  category: "Leitsubstanzziel", name: "Mittel bei Knochenerkrankungen", anchor: "Knochenerkrankungen" },
+  { nr: "18.3",category: "Leitsubstanzziel", name: "Antidementiva", anchor: "Antidementiva" },
+  { nr: "24.1",category: "Leitsubstanzziel", name: "Prostatasyndrom (benigne)", anchor: "Prostatasyndroms" },
+  { nr: "24.2",category: "Leitsubstanzziel", name: "Urologische Spasmolytika", anchor: "Urologische Spasmolytika" },
+  { nr: "31",  category: "Mengenziel", name: "Protonenpumpenblocker (PPI)", anchor: "Protonenpumpenblocker", isQuantityGoal: true },
+];
+
+function wsvFindTriple(text, anchor) {
+  const idx = text.indexOf(anchor);
+  if (idx === -1) return null;
+  const forward = text.slice(idx, Math.min(text.length, idx + 500));
+  const f = forward.match(/(\d{1,3},\d{2})\s+([\d.]+)\s+(\d{1,3},\d{2})/);
+  if (f) return { zielwert: parseGerNum(f[1]), ddd: parseGerInt(f[2]), anteil: parseGerNum(f[3]) };
+  const back = text.slice(Math.max(0, idx - 400), idx);
+  const matches = [...back.matchAll(/(\d{1,3},\d{2})\s+([\d.]+)\s+(\d{1,3},\d{2})/g)];
+  if (matches.length > 0) {
+    const last = matches[matches.length - 1];
+    return { zielwert: parseGerNum(last[1]), ddd: parseGerInt(last[2]), anteil: parseGerNum(last[3]) };
+  }
+  return null;
+}
+
+function wsvStatus(g, p) {
+  if (g.isQuantityGoal) {
+    if (p.anteil <= p.zielwert) return "gruen";
+    if (p.anteil <= p.zielwert * 1.05) return "gelb";
+    return "rot";
+  }
+  if (p.anteil >= p.zielwert) return "gruen";
+  if (p.anteil >= p.zielwert * 0.90) return "gelb";
+  return "rot";
+}
+
+function parseWsvPdf(text) {
+  let quarter = null;
+  let qm = text.match(/Verordnungsdaten\s+(?:des\s+)?(\d)\.\s*Quartals?\s+(\d{4})/i);
+  if (!qm) qm = text.match(/Quartal\s+(\d)\/(\d{4})/);
+  if (qm) quarter = `${qm[2]}-Q${qm[1]}`;
+
+  let bsnr = null;
+  const bm = text.match(/Betriebsstätte\s+(\d{9})/);
+  if (bm) bsnr = bm[1];
+
+  let documentDate = null;
+  const dm = text.match(/Stand:\s*(\d{2}\.\d{2}\.\d{4})/);
+  if (dm) documentDate = dm[1];
+
+  let gesamt = null;
+  const gm = text.match(/Wert\s+Ihrer\s+Praxis\s+kumuliert:?\s*(\d{1,3},\d{2})\s*%/);
+  if (gm) gesamt = parseGerNum(gm[1]);
+
+  let historicalGesamt = [];
+  const histIdx = text.indexOf("Entwicklung Gesamtergebnis");
+  if (histIdx !== -1) {
+    const section = text.slice(histIdx, histIdx + 800);
+    const qs = [...section.matchAll(/(\d)\/(\d{4})/g)].map(m => `${m[2]}-Q${m[1]}`);
+    const vs = [...section.matchAll(/(\d{1,3},\d{2})\s*%/g)].map(m => parseGerNum(m[1]));
+    for (let i = 0; i < Math.min(qs.length, vs.length); i++) {
+      historicalGesamt.push({ quarter: qs[i], value: vs[i] });
+    }
+  }
+
+  const ziele = [];
+  for (const g of WSV_GROUPS) {
+    const p = wsvFindTriple(text, g.anchor);
+    if (p && !isNaN(p.zielwert) && !isNaN(p.anteil)) {
+      ziele.push({
+        nr: g.nr, category: g.category, name: g.name,
+        zielwert: p.zielwert, ddd: p.ddd, anteil: p.anteil,
+        status: wsvStatus(g, p), isQuantityGoal: !!g.isQuantityGoal,
+      });
+    }
+  }
+  return { quarter, bsnr, documentDate, gesamtErgebnis: gesamt, historicalGesamt, ziele, parsedAt: new Date().toISOString() };
+}
+
+// WSV file handling
+function initWsvDrop() {
+  const drop = document.getElementById("wsv-drop");
+  const inp  = document.getElementById("wsv-file");
+  if (!drop || !inp) return;
+  drop.addEventListener("click", () => inp.click());
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("dragover"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("dragover"));
+  drop.addEventListener("drop", e => {
+    e.preventDefault(); drop.classList.remove("dragover");
+    if (e.dataTransfer.files.length) handleWsvFile(e.dataTransfer.files[0]);
+  });
+  inp.addEventListener("change", e => { if (e.target.files.length) handleWsvFile(e.target.files[0]); });
+}
+
+async function handleWsvFile(file) {
+  const status = document.getElementById("wsv-status");
+  status.textContent = "PDF wird gelesen…";
+  try {
+    const text = await extractPdfText(file);
+    const parsed = parseWsvPdf(text);
+    if (!parsed.quarter) { status.innerHTML = "<span class='status-err'>Quartal nicht erkannt.</span>"; return; }
+    if (parsed.ziele.length === 0) { status.innerHTML = "<span class='status-err'>Keine Wirkstoffziele erkannt.</span>"; return; }
+    wsvPending = parsed;
+    status.innerHTML = `<span class='status-ok'>✓ ${parsed.ziele.length} Wirkstoffziele erkannt für ${parsed.quarter}.</span>`;
+    renderWsvPreview(parsed);
+  } catch (err) {
+    status.innerHTML = `<span class='status-err'>Fehler: ${err.message}</span>`;
+    console.error(err);
+  }
+}
+
+function renderWsvPreview(p) {
+  let html = `<p style="font-size:0.82rem;"><b>Quartal:</b> ${p.quarter}`;
+  if (p.bsnr) html += ` · <b>BSNR:</b> ${p.bsnr}`;
+  if (p.documentDate) html += ` · <b>Stand:</b> ${p.documentDate}`;
+  if (p.gesamtErgebnis !== null) html += ` · <b>Gesamt:</b> ${p.gesamtErgebnis.toFixed(2)} %`;
+  html += `</p><table><thead><tr><th>Nr</th><th>Ziel</th><th>Kategorie</th><th class="num">Praxis %</th><th class="num">Ziel %</th><th class="num">DDD</th><th>Status</th></tr></thead><tbody>`;
+  p.ziele.forEach(z => {
+    const dotCol = z.status === "gruen" ? "var(--success)" : z.status === "gelb" ? "var(--amber)" : "var(--rust)";
+    html += `<tr><td>${z.nr}</td><td>${z.name}</td><td>${z.category}</td>
+      <td class="num">${z.anteil.toFixed(2)}</td><td class="num">${z.zielwert.toFixed(2)}</td>
+      <td class="num">${fmt(z.ddd)}</td>
+      <td><span class="pill-dot" style="display:inline-block;color:${dotCol};"></span></td></tr>`;
+  });
+  html += `</tbody></table>`;
+  document.getElementById("wsv-preview-content").innerHTML = html;
+  document.getElementById("wsv-preview").style.display = "block";
+}
+
+function wsvSave() {
+  if (!wsvPending) return;
+  const idx = wsvData.findIndex(d => d.quarter === wsvPending.quarter);
+  if (idx >= 0) {
+    if (!confirm(`Für ${wsvPending.quarter} bereits gespeichert. Überschreiben?`)) return;
+    wsvData[idx] = wsvPending;
+  } else wsvData.push(wsvPending);
+  wsvData.sort((a, b) => a.quarter.localeCompare(b.quarter));
+  persistLocal();
+  syncToGitHub();
+  wsvPending = null;
+  document.getElementById("wsv-preview").style.display = "none";
+  document.getElementById("wsv-status").innerHTML = "<span class='status-ok'>✓ Übernommen.</span>";
+  renderWsv();
+}
+function wsvCancel() {
+  wsvPending = null;
+  document.getElementById("wsv-preview").style.display = "none";
+  document.getElementById("wsv-status").textContent = "";
+}
+
+function renderWsv() {
+  const empty = document.getElementById("wsv-empty");
+  const results = document.getElementById("wsv-results");
+  if (wsvData.length === 0) { empty.style.display = "block"; results.style.display = "none"; return; }
+  empty.style.display = "none"; results.style.display = "block";
+
+  const quarters = wsvData.map(d => d.quarter);
+  if (!wsvCurrentQuarter || !quarters.includes(wsvCurrentQuarter)) {
+    wsvCurrentQuarter = quarters[quarters.length - 1];
+  }
+  const sel = document.getElementById("wsv-quarter-select");
+  sel.innerHTML = quarters.map(q => `<option value="${q}"${q === wsvCurrentQuarter ? ' selected' : ''}>${q}</option>`).join("");
+  sel.onchange = () => { wsvCurrentQuarter = sel.value; renderWsvQuarter(); };
+
+  renderWsvQuarter();
+}
+
+function renderWsvQuarter() {
+  const last = wsvData.find(d => d.quarter === wsvCurrentQuarter);
+  if (!last) return;
+
+  document.getElementById("wsv-source-info").textContent = last.documentDate ? `Stand: ${last.documentDate}` : "";
+  document.getElementById("wsv-summary").innerHTML = wsvSummary(last);
+
+  const counts = { gruen: 0, gelb: 0, rot: 0 };
+  last.ziele.forEach(z => counts[z.status]++);
+  const cards = [
+    { label: "Ziele erreicht", value: counts.gruen, cls: "success" },
+    { label: "Knapp verfehlt", value: counts.gelb, cls: "amber" },
+    { label: "Handlungsbedarf", value: counts.rot, cls: "rust" },
+    { label: "Gesamtergebnis", value: last.gesamtErgebnis !== null ? last.gesamtErgebnis.toFixed(1) + " %" : "—", cls: "" },
+  ];
+  document.getElementById("wsv-ampel-cards").innerHTML = cards.map(c =>
+    `<div class="kpi-card ${c.cls}"><div class="kpi-name">${c.label}</div><div class="kpi-value">${c.value}</div></div>`
+  ).join("");
+
+  // Historical chart
+  const hist = wsvMergeHist();
+  drawLineChart("chart-wsv-gesamt", hist.map(h => h.quarter), [
+    { label: "Gesamtergebnis (%)", data: hist.map(h => h.value), color: "#924E7D" },
+    { label: "Zielwert (100 %)", data: hist.map(() => 100), color: "#B04A35", dashed: true },
+  ]);
+
+  // Detail table
+  wsvRenderDetail(last);
+
+  // Ziel select + chart
+  const zsel = document.getElementById("wsv-ziel-select");
+  zsel.innerHTML = last.ziele.map(z => `<option value="${z.nr}">${z.nr} — ${z.name}</option>`).join("");
+  zsel.onchange = () => wsvDrawZielTrend(zsel.value);
+  wsvDrawZielTrend(last.ziele[0]?.nr);
+}
+
+function wsvMergeHist() {
+  const last = wsvData[wsvData.length - 1];
+  const map = new Map();
+  if (last?.historicalGesamt) last.historicalGesamt.forEach(h => map.set(h.quarter, h.value));
+  wsvData.forEach(d => { if (d.gesamtErgebnis !== null) map.set(d.quarter, d.gesamtErgebnis); });
+  return [...map.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([q, v]) => ({ quarter: q, value: v }));
+}
+
+function wsvRenderDetail(last) {
+  const sorted = [...last.ziele].sort((a, b) => {
+    const o = { rot: 0, gelb: 1, gruen: 2 };
+    if (o[a.status] !== o[b.status]) return o[a.status] - o[b.status];
+    return b.ddd - a.ddd;
+  });
+  let html = `<table><thead><tr><th>Nr</th><th>Wirkstoffziel</th><th>Kategorie</th>
+    <th class="num">Praxis %</th><th class="num">Ziel %</th><th class="num">Δ pp</th>
+    <th class="num">DDD</th><th>Status</th></tr></thead><tbody>`;
+  sorted.forEach(z => {
+    const diff = z.anteil - z.zielwert;
+    const diffStr = (diff >= 0 ? "+" : "") + diff.toFixed(2);
+    const diffColor = diff >= 0 ? "var(--success)" : "var(--rust)";
+    const dotCol = z.status === "gruen" ? "var(--success)" : z.status === "gelb" ? "var(--amber)" : "var(--rust)";
+    html += `<tr><td>${z.nr}</td><td><b>${z.name}</b></td>
+      <td style="font-size:0.72rem;color:var(--warm-muted);">${z.category}</td>
+      <td class="num">${z.anteil.toFixed(2)}</td><td class="num">${z.zielwert.toFixed(2)}</td>
+      <td class="num" style="color:${diffColor};font-weight:600;">${diffStr}</td>
+      <td class="num">${fmt(z.ddd)}</td>
+      <td><span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${dotCol};"></span></td></tr>`;
+  });
+  html += `</tbody></table>`;
+  html += `<div class="helper" style="margin-top:8px;">Sortiert nach Handlungsbedarf (rot zuerst), dann nach DDD. Ampel-Heuristik: grün ab Ziel erreicht · gelb bis 10 % darunter · rot darüber. Die echte KVB-Bewertung kann durch Wirtschaftlichkeitsfaktoren leicht abweichen.</div>`;
+  document.getElementById("wsv-detail-table").innerHTML = html;
+}
+
+function wsvDrawZielTrend(nr) {
+  if (!nr) return;
+  const labels = wsvData.map(d => d.quarter);
+  const series = wsvData.map(d => (d.ziele || []).find(x => x.nr === nr)?.anteil ?? null);
+  const targets = wsvData.map(d => (d.ziele || []).find(x => x.nr === nr)?.zielwert ?? null);
+  drawLineChart("chart-wsv-ziel", labels, [
+    { label: "Praxis %", data: series, color: "#924E7D" },
+    { label: "Ziel %", data: targets, color: "#B04A35", dashed: true },
+  ]);
+}
+
+function wsvSummary(last) {
+  const counts = { gruen: 0, gelb: 0, rot: 0 };
+  last.ziele.forEach(z => counts[z.status]++);
+  const reds = last.ziele.filter(z => z.status === "rot").sort((a, b) => b.ddd - a.ddd);
+  const yellows = last.ziele.filter(z => z.status === "gelb");
+
+  let s = `<p><b>Stand: Quartal ${last.quarter}.</b> `;
+  if (last.gesamtErgebnis !== null) {
+    s += `Das Gesamtergebnis liegt bei <b>${last.gesamtErgebnis.toFixed(1)} %</b> (Ziel: 100 %). `;
+    if (last.gesamtErgebnis >= 100) s += `Die Praxis liegt insgesamt im wirtschaftlichen Zielbereich.`;
+    else if (last.gesamtErgebnis >= 90) s += `Die Praxis liegt knapp unter dem Zielwert — kleinere Korrekturen reichen voraussichtlich aus.`;
+    else s += `<b>Die Praxis liegt deutlich unter dem Zielwert — es besteht Handlungsbedarf.</b>`;
+  }
+  s += `</p>`;
+  if (last.historicalGesamt?.length > 1) {
+    const prev = last.historicalGesamt.slice(0, -1);
+    const avg = prev.reduce((a, h) => a + h.value, 0) / prev.length;
+    if (last.gesamtErgebnis !== null) {
+      const drop = last.gesamtErgebnis - avg;
+      if (Math.abs(drop) > 5) {
+        s += `<p><b>Veränderung:</b> Gegenüber dem Schnitt der Vorquartale (${avg.toFixed(1)} %) `;
+        s += drop < 0
+          ? `ist das Ergebnis um <b>${Math.abs(drop).toFixed(1)} Prozentpunkte gefallen</b>. Hinweis: Bei Modell-Trendmeldungen liegt das oft an verschärften Zielwerten der KVB, nicht zwingend am Verordnungsverhalten.`
+          : `ist das Ergebnis um <b>${drop.toFixed(1)} Prozentpunkte gestiegen</b>.`;
+        s += `</p>`;
+      }
+    }
+  }
+  s += `<p><b>Ampelbilanz:</b> ${counts.gruen} grün, ${counts.gelb} gelb, ${counts.rot} rot.</p>`;
+  if (reds.length > 0) {
+    s += `<p><b>Größte Hebel (rote Ziele nach DDD):</b></p><ul>`;
+    reds.slice(0, 4).forEach(z => {
+      const diff = z.anteil - z.zielwert;
+      s += `<li><b>${z.name}</b>: ${z.anteil.toFixed(1)} % gegen Ziel ${z.zielwert.toFixed(1)} % (Δ ${diff.toFixed(1)} pp, ${fmt(z.ddd)} DDD)</li>`;
+    });
+    s += `</ul>`;
+  }
+  if (yellows.length > 0 && reds.length <= 4) {
+    s += `<p><b>Knapp verfehlt:</b> ${yellows.map(z => z.name).join(", ")}.</p>`;
+  }
+  s += `<p class="helper" style="margin-top:10px;">Diese Zusammenfassung wurde automatisch erstellt und ersetzt keine Pharmakotherapieberatung. Bei roten Zielen mit hohem Volumen lohnt sich der KVB-Beratungstermin: <a href="https://www.kvb.de/mitglieder/beratung" target="_blank">kvb.de/mitglieder/beratung</a></p>`;
+  return s;
+}
+
+// ══════════════════════════════════════════════════════════════
+// HÄUFIGKEITSSTATISTIK (HW0021 / HW0024)
+// ══════════════════════════════════════════════════════════════
+const HF_LSTGR = {
+  "01":"Grundleistungen","02":"Besuche/Visiten","03":"Beratungs- und Betreuungsgrundleistungen",
+  "04":"Allgemeine Leistungen","05":"Mutterschaftsvorsorge","06":"Früherkennung",
+  "07":"Sonstige Hilfen","08":"Sonderleistungen","09":"Phys.-med. Leistungen",
+  "10":"Basis-Labor","11":"Spezial-Labor","12":"Bildgebende Verfahren u.ä.",
+  "13":"OP-/Narkose-/Überwach.-L.","14":"Kosten/Pauschalerstattungen",
+  "15":"Impfungen","16":"DMP Leistungen",
+};
+const HF_LABELS = {
+  "03000":"Versichertenpauschale","03004":"Versichertenpauschale (Kind./Jug.)",
+  "03005":"Versichertenpauschale (76+)","03008":"Vers.-Pauschale Pflegeeinrichtungen",
+  "03040":"Vorhaltepauschale","03220":"Chronikerpauschale","03221":"Chronikerzuschlag",
+  "03222":"Chronikerpauschale-Zuschlag","03230":"Problemorientiertes Gespräch",
+  "03241":"Geriatrisches Basisassessment","01410":"Hausbesuch","01411":"Dringender Hausbesuch",
+  "01412":"Unverzüglicher Hausbesuch","01430":"Verwaltungskomplex","01435":"Telefonische Beratung",
+  "01480":"Besuch Pflegeheim","01641":"Brief Versandkostenpauschale","01648":"Pauschale eGK",
+  "01731":"Hautkrebs-Früherkennung","01732":"Gesundheitsuntersuchung",
+  "01734":"Untersuchung 18-34","01740":"Koloskopie-Beratung","01745":"Koloskopie-Beratung Folge",
+  "32001":"Wirtschaftlichkeitsbonus Labor",
+};
+
+const HF_NUM = "(?:-?[\\d.]+,\\d{2}|-?\\d+(?:\\.\\d{3})*)";
+const HF_GOP = "(\\d{5}[A-Z]?)";
+
+function hfDetect(text) {
+  if (/HW0021/.test(text) || /Häufigkeitsstatistik/.test(text)) return "HW0021";
+  if (/HW0024/.test(text) || /Gesamtübersicht/.test(text)) return "HW0024";
+  return null;
+}
+function hfQuarter(t) { const m = t.match(/Quartal\s+(\d)\/(\d{4})/); return m ? `${m[2]}-Q${m[1]}` : null; }
+function hfBsnr(t)    { const m = t.match(/BSNR\s+(\d{9})/); return m ? m[1] : null; }
+function hfDatum(t)   { const m = t.match(/Datum\s+(\d{2}\.\d{2}\.\d{4})/); return m ? m[1] : null; }
+function hfFallzahlen(t) {
+  const fz = {};
+  let m = t.match(/Kurativ\s+([\d.]+)/); if (m) fz.kurativ = parseGerInt(m[1]);
+  m = t.match(/Mutterschaftsvorsorge\s+([\d.]+)(?=\s|$)/); if (m && /^\d/.test(m[1])) fz.mutterschaft = parseGerInt(m[1]);
+  m = t.match(/Früherkennung\s+([\d.]+)/); if (m) fz.frueherkennung = parseGerInt(m[1]);
+  m = t.match(/Sonstige\s+Hilfen\s+([\d.]+)(?=\s|$)/); if (m && /^\d/.test(m[1])) fz.sonstigeHilfen = parseGerInt(m[1]);
+  m = t.match(/Impfungen\s+([\d.]+)/); if (m) fz.impfungen = parseGerInt(m[1]);
+  return fz;
+}
+
+function parseHW0021(text) {
+  const norm = text.replace(/\s+/g, " ");
+  const quarter = hfQuarter(norm);
+  const bsnr = hfBsnr(norm);
+  const datum = hfDatum(norm);
+  const fallzahlen = hfFallzahlen(norm);
+
+  const rowRe = new RegExp(HF_GOP + "\\s+" + Array(12).fill(HF_NUM).join("\\s+"), "g");
+  const rows = []; let m;
+  while ((m = rowRe.exec(norm)) !== null) {
+    const parts = m[0].split(/\s+/);
+    if (parts.length < 13) continue;
+    const n = parts.slice(1, 13).map(parseGerNum);
+    rows.push({
+      gop: parts[0],
+      haeufigkeit: Math.round(n[0]), wertEuro: n[1], gesamtbetrag: n[2],
+      euroProFall: n[3], euroProFallPG: n[4], ansatzFaelle: Math.round(n[5]),
+      leistungenProFall: n[6], ansatzProzentFZ: n[7], ansatzProzentFZPG: n[8],
+      haeufigkeit100Faelle: n[9], abweichung: n[10], ansatzPraxen: n[11],
+    });
+  }
+  // Dedup (GOPs can appear in multiple LSTGR sections)
+  const seen = new Set(); const unique = [];
+  for (const r of rows) {
+    const key = r.gop + "|" + r.haeufigkeit + "|" + r.wertEuro;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (unique.find(u => u.gop === r.gop)) continue;
+    unique.push(r);
+  }
+
+  const groups = [];
+  const lstgrRe = new RegExp("LSTGR\\s+(\\d{2})(?:\\/[\\d_])?[^L]*?\\s+Summe\\s+(\\d+)\\s+" + HF_NUM + "\\s+" + HF_NUM + "\\s+" + HF_NUM, "g");
+  let gm;
+  while ((gm = lstgrRe.exec(norm)) !== null) {
+    groups.push({
+      code: gm[1], bezeichnung: HF_LSTGR[gm[1]] || "",
+      anzahlGops: parseInt(gm[2]),
+      haeufigkeit: parseGerInt(gm[3]), gesamtbetrag: parseGerNum(gm[4]), euroProFall: parseGerNum(gm[5]),
+    });
+  }
+
+  let kurativ = null;
+  const km = norm.match(/Leistungen\s+Kurativ\s+\([^)]*ohne\s+WiBo\)\s+Summe\s+(\d+)\s+(\S+)\s+(\S+)\s+(\S+)/);
+  if (km) {
+    kurativ = { anzahl: parseInt(km[1]), haeufigkeit: parseGerInt(km[2]),
+                gesamtbetrag: parseGerNum(km[3]), euroProFall: parseGerNum(km[4]) };
+  }
+
+  return { type: "HW0021", quarter, bsnr, datum, fallzahlen,
+           gops: unique, lstgrGroups: groups, kurativSumme: kurativ,
+           parsedAt: new Date().toISOString() };
+}
+
+function parseHW0024(text) {
+  const norm = text.replace(/\s+/g, " ");
+  const quarter = hfQuarter(norm);
+  const bsnr = hfBsnr(norm);
+  const datum = hfDatum(norm);
+
+  const knownLabels = [
+    { code: "01", label: "Grundleistungen" }, { code: "02", label: "Besuche/Visiten" },
+    { code: "03", label: "Ber. u. Betr. Grundleistungen", aliases: ["Ber. u. Betreuungs"] },
+    { code: "04", label: "Allgemeine Leistungen" }, { code: "08", label: "Sonderleistungen" },
+    { code: "09", label: "Phys.-med. Leistungen" }, { code: "12", label: "Bildgebende Verfahren u.ä." },
+    { code: "13", label: "OP-/Narkose-/Überwach.-L." },
+    { code: "10", label: "Gesamt Basis-Labor" }, { code: "11", label: "Gesamt Spezial-Labor" },
+    { code: "14", label: "Kosten/Pauschalerstattungen" }, { code: "15", label: "Impfungen" },
+    { code: "05", label: "Mutterschaftsvorsorge" }, { code: "06", label: "Früherkennung" },
+    { code: "07", label: "Sonstige Hilfen" },
+  ];
+
+  const lstgr = [];
+  for (const def of knownLabels) {
+    const labels = [def.label, ...(def.aliases || [])];
+    let idx = -1;
+    for (const lbl of labels) { idx = norm.indexOf(lbl); if (idx >= 0) break; }
+    if (idx < 0) continue;
+    const window = norm.slice(idx, idx + 350);
+    const nums = [...window.matchAll(/-?[\d.]+,\d{2}/g)].map(m => parseGerNum(m[0]));
+    if (nums.length < 5) continue;
+    const tail = nums.slice(-6);
+    if (tail.length < 6) continue;
+    const [gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz] = tail;
+    if (gesamt < praxisProFall) continue;
+    lstgr.push({
+      code: def.code, bezeichnung: HF_LSTGR[def.code] || def.label,
+      gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz,
+    });
+  }
+
+  let summeKurativ = null;
+  const skm = norm.match(/Summe\s+kurativ\s*\(\d\)\s+(?:[\d.,]+\s+){0,4}([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+([\d.,]+)\s+(-?[\d.,]+)\s+(-?[\d.,]+)/);
+  if (skm) {
+    summeKurativ = {
+      gesamt: parseGerNum(skm[1]), praxisProFall: parseGerNum(skm[2]),
+      pgProFall: parseGerNum(skm[3]), pggewProFall: parseGerNum(skm[4]),
+      abwEur: parseGerNum(skm[5]), abwProz: parseGerNum(skm[6]),
+    };
+  }
+
+  return { type: "HW0024", quarter, bsnr, datum, lstgr, summeKurativ, parsedAt: new Date().toISOString() };
+}
+
+// HF file handling
+function initHfDrop() {
+  const drop = document.getElementById("hf-drop");
+  const inp  = document.getElementById("hf-file");
+  if (!drop || !inp) return;
+  drop.addEventListener("click", () => inp.click());
+  drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("dragover"); });
+  drop.addEventListener("dragleave", () => drop.classList.remove("dragover"));
+  drop.addEventListener("drop", e => {
+    e.preventDefault(); drop.classList.remove("dragover");
+    if (e.dataTransfer.files.length) handleHfFiles(e.dataTransfer.files);
+  });
+  inp.addEventListener("change", e => { if (e.target.files.length) handleHfFiles(e.target.files); });
+}
+
+async function handleHfFiles(fileList) {
+  const status = document.getElementById("hf-status");
+  status.textContent = "PDF(s) werden gelesen…";
+  hfPending = [];
+  const results = [];
+  for (const file of fileList) {
+    try {
+      const text = await extractPdfTextRowAware(file);
+      const type = hfDetect(text);
+      let parsed = null;
+      if (type === "HW0021") parsed = parseHW0021(text);
+      else if (type === "HW0024") parsed = parseHW0024(text);
+      else { results.push({ file: file.name, ok: false, msg: "Typ nicht erkannt" }); continue; }
+      if (!parsed.quarter) { results.push({ file: file.name, ok: false, msg: "Quartal nicht erkannt" }); continue; }
+      const detail = parsed.type === "HW0021"
+        ? `${parsed.gops.length} GOPs · ${parsed.lstgrGroups.length} Leistungsgruppen`
+        : `${parsed.lstgr.length} LSTGR-Aggregate`;
+      results.push({ file: file.name, ok: true, parsed, msg: `${parsed.type} · ${parsed.quarter} · ${detail}` });
+      hfPending.push(parsed);
+    } catch (err) {
+      results.push({ file: file.name, ok: false, msg: `Fehler: ${err.message}` });
+      console.error(err);
+    }
+  }
+  status.innerHTML = results.map(r =>
+    `<div style="color:${r.ok ? 'var(--success)' : 'var(--rust)'};margin-bottom:4px;">${r.ok ? '✓' : '✗'} <b>${r.file}</b> — ${r.msg}</div>`
+  ).join("");
+  if (hfPending.length > 0) renderHfPreview();
+}
+
+function renderHfPreview() {
+  let html = "";
+  hfPending.forEach(p => {
+    html += `<div style="margin-bottom:16px;padding:14px;background:var(--primary-bg);border-radius:8px;">
+      <p style="font-size:0.82rem;margin-bottom:6px;"><b>${p.type}</b> · Quartal ${p.quarter}`;
+    if (p.bsnr) html += ` · BSNR ${p.bsnr}`;
+    if (p.datum) html += ` · Stand ${p.datum}`;
+    html += `</p>`;
+    if (p.type === "HW0021") {
+      html += `<p style="font-size:0.75rem;color:var(--warm-muted);">Erkannt: <b>${p.gops.length}</b> GOPs, <b>${p.lstgrGroups.length}</b> Leistungsgruppen-Summen`;
+      if (p.fallzahlen.kurativ) html += `, ${fmt(p.fallzahlen.kurativ)} kurative Fälle`;
+      html += `.</p>`;
+      if (p.gops.length < 30) html += `<div class="warning-box">⚠ Nur ${p.gops.length} GOPs erkannt — normal wären 150+. Bitte Stichprobe prüfen.</div>`;
+      const top = [...p.gops].sort((a, b) => b.haeufigkeit - a.haeufigkeit).slice(0, 5);
+      html += `<details><summary>Stichprobe Top-5 GOPs</summary>
+        <table style="margin-top:8px;font-size:0.72rem;"><thead><tr><th>GOP</th><th class="num">Häufig.</th><th class="num">€ ges.</th><th class="num">Abw. %</th><th class="num">Verbr. %</th></tr></thead><tbody>`;
+      top.forEach(g => {
+        html += `<tr><td>${g.gop}</td><td class="num">${fmt(g.haeufigkeit)}</td><td class="num">${eur(g.gesamtbetrag)}</td><td class="num">${g.abweichung.toFixed(2)}</td><td class="num">${g.ansatzPraxen.toFixed(2)}</td></tr>`;
+      });
+      html += `</tbody></table></details>`;
+    } else {
+      html += `<p style="font-size:0.75rem;color:var(--warm-muted);">Erkannt: <b>${p.lstgr.length}</b> LSTGR-Aggregate`;
+      if (p.summeKurativ) html += `, Summe kurativ ${eur(p.summeKurativ.gesamt)} (∅ ${p.summeKurativ.praxisProFall.toFixed(2)} €/Fall)`;
+      html += `.</p>`;
+      html += `<details><summary>Stichprobe LSTGR</summary>
+        <table style="margin-top:8px;font-size:0.72rem;"><thead><tr><th>LSTGR</th><th>Bezeichnung</th><th class="num">Gesamt €</th><th class="num">∅ Praxis</th><th class="num">Abw. %</th></tr></thead><tbody>`;
+      p.lstgr.slice(0, 6).forEach(l => {
+        html += `<tr><td>${l.code}</td><td>${l.bezeichnung}</td><td class="num">${eur(l.gesamt)}</td><td class="num">${l.praxisProFall.toFixed(2)}</td><td class="num">${l.abwProz.toFixed(2)}</td></tr>`;
+      });
+      html += `</tbody></table></details>`;
+    }
+    html += `</div>`;
+  });
+  document.getElementById("hf-preview-content").innerHTML = html;
+  document.getElementById("hf-preview").style.display = "block";
+}
+
+function hfSave() {
+  if (hfPending.length === 0) return;
+  let added = 0, updated = 0;
+  hfPending.forEach(p => {
+    const idx = hfData.findIndex(d => d.quarter === p.quarter && d.type === p.type);
+    if (idx >= 0) { hfData[idx] = p; updated++; } else { hfData.push(p); added++; }
+  });
+  hfData.sort((a, b) => a.quarter.localeCompare(b.quarter));
+  persistLocal();
+  syncToGitHub();
+  hfPending = [];
+  document.getElementById("hf-preview").style.display = "none";
+  document.getElementById("hf-status").innerHTML = `<span class='status-ok'>✓ ${added} neu · ${updated} aktualisiert.</span>`;
+  renderHaeuf();
+}
+function hfCancel() {
+  hfPending = [];
+  document.getElementById("hf-preview").style.display = "none";
+  document.getElementById("hf-status").textContent = "";
+}
+
+function hfGetQuarters() { return [...new Set(hfData.map(d => d.quarter))].sort(); }
+function hfGetFor(q) {
+  return {
+    hw21: hfData.find(d => d.quarter === q && d.type === "HW0021"),
+    hw24: hfData.find(d => d.quarter === q && d.type === "HW0024"),
+  };
+}
+
+function renderHaeuf() {
+  const empty = document.getElementById("hf-empty");
+  const results = document.getElementById("hf-results");
+  if (hfData.length === 0) { empty.style.display = "block"; results.style.display = "none"; return; }
+  empty.style.display = "none"; results.style.display = "block";
+
+  const quarters = hfGetQuarters();
+  if (!hfCurrentQuarter || !quarters.includes(hfCurrentQuarter)) hfCurrentQuarter = quarters[quarters.length - 1];
+
+  const sel = document.getElementById("hf-quarter-select");
+  sel.innerHTML = quarters.map(q => `<option value="${q}"${q === hfCurrentQuarter ? ' selected' : ''}>${q}</option>`).join("");
+  sel.onchange = () => { hfCurrentQuarter = sel.value; renderHfQuarter(); };
+  renderHfQuarter();
+}
+
+function renderHfQuarter() {
+  const { hw21, hw24 } = hfGetFor(hfCurrentQuarter);
+  const src = [];
+  if (hw21) src.push(`HW0021 (${hw21.gops.length} GOPs)`);
+  if (hw24) src.push(`HW0024 (${hw24.lstgr.length} LSTGR)`);
+  document.getElementById("hf-source-info").textContent = src.length ? "Quellen: " + src.join(" + ") : "";
+
+  document.getElementById("hf-summary").innerHTML = hfBuildSummary(hw21, hw24);
+  hfRenderKpis(hw21, hw24);
+  hfRenderLstgr(hw21, hw24);
+  hfRenderDeviation(hw21);
+  hfRenderSpread(hw21);
+  hfRenderDetail(hw21);
+  hfRenderTrendSelect(hw21);
+}
+
+function hfBuildSummary(hw21, hw24) {
+  if (!hw21 && !hw24) return "<p>Für dieses Quartal sind keine Daten verfügbar.</p>";
+  let s = `<p><b>Quartal ${hfCurrentQuarter}.</b> `;
+  if (hw21?.fallzahlen?.kurativ) {
+    s += `Die Praxis (BAG) hat <b>${fmt(hw21.fallzahlen.kurativ)} kurative Behandlungsfälle</b> abgerechnet`;
+    if (hw21.fallzahlen.impfungen) s += `, dazu ${fmt(hw21.fallzahlen.impfungen)} Impfleistungen`;
+    if (hw21.fallzahlen.frueherkennung) s += ` und ${fmt(hw21.fallzahlen.frueherkennung)} Früherkennungs-Leistungen`;
+    s += `.</p>`;
+  }
+  if (hw24?.summeKurativ) {
+    const k = hw24.summeKurativ;
+    s += `<p><b>Wirtschaftlichkeit gesamt (HW0024):</b> ∅ <b>${k.praxisProFall.toFixed(2)} €/Fall</b> Praxis gegen <b>${k.pggewProFall.toFixed(2)} €/Fall</b> gewichteter Prüfgruppen-Schnitt — `;
+    if (k.abwProz > 5) s += `<b>+${k.abwProz.toFixed(1)} %</b> über dem Schnitt (Honorarstärke).`;
+    else if (k.abwProz < -5) s += `<b>${k.abwProz.toFixed(1)} %</b> unter dem Schnitt (möglicherweise Honorarpotential).`;
+    else s += `deckungsgleich (Abw. ${k.abwProz.toFixed(1)} %).`;
+    s += `</p>`;
+  }
+  if (hw21) {
+    const sig = hw21.gops.filter(g => g.haeufigkeit >= 10 && Math.abs(g.abweichung) > 50);
+    const pos = sig.filter(g => g.abweichung > 0).sort((a, b) => b.abweichung - a.abweichung).slice(0, 3);
+    const neg = sig.filter(g => g.abweichung < 0).sort((a, b) => a.abweichung - b.abweichung).slice(0, 3);
+    if (pos.length) {
+      s += `<p><b>Stärkste Überschreitungen (>50 % über Schnitt, Volumen ≥10):</b></p><ul>`;
+      pos.forEach(g => {
+        const lab = HF_LABELS[g.gop] || "";
+        s += `<li><b>${g.gop}</b>${lab ? ` (${lab})` : ""}: ${g.abweichung.toFixed(1)} % über Schnitt, ${fmt(g.haeufigkeit)}× abgerechnet</li>`;
+      });
+      s += `</ul>`;
+    }
+    if (neg.length) {
+      s += `<p><b>Stärkste Unterschreitungen (Honorarpotential):</b></p><ul>`;
+      neg.forEach(g => {
+        const lab = HF_LABELS[g.gop] || "";
+        s += `<li><b>${g.gop}</b>${lab ? ` (${lab})` : ""}: ${g.abweichung.toFixed(1)} % unter Schnitt</li>`;
+      });
+      s += `</ul>`;
+    }
+    const rare = hw21.gops.filter(g => g.haeufigkeit >= 5 && g.ansatzPraxen < 20).sort((a, b) => a.ansatzPraxen - b.ansatzPraxen).slice(0, 3);
+    if (rare.length) {
+      s += `<p><b>Selten in der Prüfgruppe (<20 % Verbreitung, Volumen ≥5):</b> ${rare.map(g => `${g.gop} (${g.ansatzPraxen.toFixed(0)} %)`).join(", ")} — bei diesen ggf. Begründung griffbereit halten.</p>`;
+    }
+  }
+  s += `<p class="helper" style="margin-top:10px;">Maschinelle Auswertung Ihrer KVB-Statistik, ersetzt keine offizielle Wirtschaftlichkeitsprüfung. Bei Auffälligkeiten: <a href="https://www.kvb.de/mitglieder/beratung" target="_blank">kvb.de/mitglieder/beratung</a></p>`;
+  return s;
+}
+
+function hfRenderKpis(hw21, hw24) {
+  const k = [];
+  if (hw21?.fallzahlen?.kurativ) k.push({ label: "Kurative Fälle", value: fmt(hw21.fallzahlen.kurativ), cls: "" });
+  if (hw21?.kurativSumme) {
+    k.push({ label: "Honorar kurativ", value: eur(hw21.kurativSumme.gesamtbetrag), cls: "" });
+    k.push({ label: "∅ €/Fall", value: hw21.kurativSumme.euroProFall.toFixed(2) + " €", cls: "success" });
+  }
+  if (hw24?.summeKurativ) {
+    const p = hw24.summeKurativ.abwProz;
+    const cls = p > 0 ? "success" : (p < -5 ? "rust" : "amber");
+    k.push({ label: "Abw. Prüfgruppe", value: (p > 0 ? "+" : "") + p.toFixed(1) + " %", cls });
+  }
+  if (hw21) k.push({ label: "Erfasste GOPs", value: fmt(hw21.gops.length), cls: "" });
+  document.getElementById("hf-kpi-cards").innerHTML = k.map(c =>
+    `<div class="kpi-card ${c.cls}"><div class="kpi-name">${c.label}</div><div class="kpi-value">${c.value}</div></div>`
+  ).join("");
+}
+
+function hfRenderLstgr(hw21, hw24) {
+  const info = document.getElementById("hf-lstgr-info");
+  const tbl  = document.getElementById("hf-lstgr-table");
+  const chartWrap = document.getElementById("hf-lstgr-chart-wrap");
+  if (!hw24) {
+    info.textContent = "HW0024 nicht hochgeladen. Zeige stattdessen LSTGR-Summen aus HW0021.";
+    if (hw21?.lstgrGroups.length) {
+      let html = `<table><thead><tr><th>LSTGR</th><th>Bezeichnung</th><th class="num">Häufigkeit</th><th class="num">Gesamt €</th><th class="num">∅ €/Fall</th></tr></thead><tbody>`;
+      hw21.lstgrGroups.forEach(g => {
+        html += `<tr><td>${g.code}</td><td>${g.bezeichnung}</td><td class="num">${fmt(g.haeufigkeit)}</td><td class="num">${eur(g.gesamtbetrag)}</td><td class="num">${g.euroProFall.toFixed(2)}</td></tr>`;
+      });
+      html += `</tbody></table>`;
+      tbl.innerHTML = html;
+    } else tbl.innerHTML = `<div class="empty">Keine LSTGR-Daten verfügbar.</div>`;
+    chartWrap.style.display = "none";
+    if (charts["chart-hf-lstgr"]) { charts["chart-hf-lstgr"].destroy(); delete charts["chart-hf-lstgr"]; }
+    return;
+  }
+  chartWrap.style.display = "";
+  info.innerHTML = `Vergleich Praxis (PG) vs. <b>gewichteter Prüfgruppen-Schnitt</b> (Spalte 9 im HW0024). "Gew." berücksichtigt Versichertenanteile der Altersgruppen.`;
+  let html = `<table><thead><tr>
+    <th>LSTGR</th><th>Bezeichnung</th><th class="num">Gesamt €</th>
+    <th class="num">∅ Praxis</th><th class="num">∅ PG</th><th class="num">∅ PG gew.</th>
+    <th class="num">Abw. €</th><th class="num">Abw. %</th>
+  </tr></thead><tbody>`;
+  const sorted = [...hw24.lstgr].sort((a, b) => Math.abs(b.abwProz) - Math.abs(a.abwProz));
+  sorted.forEach(l => {
+    const col = l.abwProz > 0 ? "var(--success)" : (l.abwProz < -10 ? "var(--rust)" : "var(--amber)");
+    html += `<tr><td>${l.code}</td><td><b>${l.bezeichnung}</b></td>
+      <td class="num">${eur(l.gesamt)}</td><td class="num">${l.praxisProFall.toFixed(2)}</td>
+      <td class="num">${l.pgProFall.toFixed(2)}</td><td class="num">${l.pggewProFall.toFixed(2)}</td>
+      <td class="num" style="color:${col};">${l.abwEur > 0 ? "+" : ""}${l.abwEur.toFixed(2)}</td>
+      <td class="num" style="color:${col};font-weight:600;">${l.abwProz > 0 ? "+" : ""}${l.abwProz.toFixed(2)} %</td></tr>`;
+  });
+  html += `</tbody></table>`;
+  tbl.innerHTML = html;
+
+  // Chart
+  const ctx = document.getElementById("chart-hf-lstgr").getContext("2d");
+  if (charts["chart-hf-lstgr"]) charts["chart-hf-lstgr"].destroy();
+  const s = [...hw24.lstgr].sort((a, b) => a.abwProz - b.abwProz);
+  charts["chart-hf-lstgr"] = new Chart(ctx, {
+    type: "bar",
+    data: {
+      labels: s.map(l => `${l.code} ${l.bezeichnung}`),
+      datasets: [{
+        label: "Abw. % zur PG (gewichtet)",
+        data: s.map(l => l.abwProz),
+        backgroundColor: s.map(l => l.abwProz >= 0 ? "#3D7A4A" : "#B04A35"),
+        borderRadius: 4,
+      }],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, indexAxis: "y",
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.x.toFixed(2) + " %" } } },
+      scales: { x: { title: { display: true, text: "Abw. € je Fall vs gew. PG in %" } } },
+    },
+  });
+}
+
+function hfRenderDeviation(hw21) {
+  if (!hw21) return;
+  const ctx = document.getElementById("chart-hf-deviation").getContext("2d");
+  function draw(dir) {
+    const cand = hw21.gops.filter(g => g.haeufigkeit >= 10);
+    const s = dir === "positive"
+      ? cand.filter(g => g.abweichung > 0).sort((a, b) => b.abweichung - a.abweichung).slice(0, 15)
+      : cand.filter(g => g.abweichung < 0).sort((a, b) => a.abweichung - b.abweichung).slice(0, 15);
+    if (charts["chart-hf-deviation"]) charts["chart-hf-deviation"].destroy();
+    charts["chart-hf-deviation"] = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: s.map(g => `${g.gop}${HF_LABELS[g.gop] ? ' — ' + HF_LABELS[g.gop] : ''}`),
+        datasets: [{
+          label: "Abw. %", data: s.map(g => g.abweichung),
+          backgroundColor: s.map(g => g.abweichung >= 0 ? "#924E7D" : "#B04A35"),
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: "y",
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: c => c.parsed.x.toFixed(2) + " %" } } },
+        scales: { x: { title: { display: true, text: "Gewichtete Abweichung in % zur Prüfgruppe" } } },
+      },
+    });
+  }
+  draw("positive");
+  document.querySelectorAll('input[name="hf-dev-dir"]').forEach(r => r.onchange = () => draw(r.value));
+}
+
+function hfRenderSpread(hw21) {
+  const wrap = document.getElementById("hf-spread-tables");
+  if (!hw21) { wrap.innerHTML = ""; return; }
+  const rare = hw21.gops.filter(g => g.haeufigkeit >= 3 && g.ansatzPraxen < 30).sort((a, b) => a.ansatzPraxen - b.ansatzPraxen).slice(0, 12);
+  const missed = hw21.gops.filter(g => g.ansatzPraxen >= 80 && g.abweichung < -50).sort((a, b) => a.abweichung - b.abweichung).slice(0, 12);
+  function tbl(rows) {
+    if (!rows.length) return `<div class="helper">Keine auffälligen Ziffern.</div>`;
+    let h = `<table><thead><tr><th>GOP</th><th class="num">Häufig.</th><th class="num">Verbr.%</th><th class="num">Abw.%</th></tr></thead><tbody>`;
+    rows.forEach(g => {
+      h += `<tr><td>${g.gop}${HF_LABELS[g.gop] ? `<br><span style="font-size:0.7rem;color:var(--warm-muted);">${HF_LABELS[g.gop]}</span>` : ''}</td><td class="num">${fmt(g.haeufigkeit)}</td><td class="num">${g.ansatzPraxen.toFixed(1)}</td><td class="num">${g.abweichung.toFixed(0)}</td></tr>`;
+    });
+    return h + `</tbody></table>`;
+  }
+  wrap.innerHTML = `
+    <div><h3 style="font-size:0.78rem;color:var(--rust);margin-bottom:8px;font-weight:700;">Selten in Prüfgruppe (<30 % Verbreitung)</h3>${tbl(rare)}</div>
+    <div><h3 style="font-size:0.78rem;color:var(--amber);margin-bottom:8px;font-weight:700;">Verbreitet, Praxis unterdurchschnittlich (≥80 %, Abw. <−50 %)</h3>${tbl(missed)}</div>`;
+}
+
+let hfSortCol = "abweichung", hfSortDir = "desc";
+function hfRenderDetail(hw21) {
+  const wrap = document.getElementById("hf-detail-table");
+  if (!hw21) { wrap.innerHTML = ""; return; }
+  const filter = document.getElementById("hf-filter");
+  function apply(list) {
+    const q = (filter.value || "").trim().toLowerCase();
+    if (!q) return list;
+    if (/^\d+$/.test(q) && q.length <= 4) {
+      const n = parseInt(q);
+      return list.filter(g => g.haeufigkeit >= n || g.gop.includes(q));
+    }
+    return list.filter(g => g.gop.toLowerCase().includes(q) || (HF_LABELS[g.gop] || "").toLowerCase().includes(q));
+  }
+  function sortList(list) {
+    const d = hfSortDir === "asc" ? 1 : -1;
+    return [...list].sort((a, b) => {
+      if (hfSortCol === "gop") return a.gop.localeCompare(b.gop) * d;
+      return (a[hfSortCol] - b[hfSortCol]) * d;
+    });
+  }
+  function th(key, label) {
+    const arr = hfSortCol === key ? (hfSortDir === "asc" ? " ▲" : " ▼") : "";
+    return `<th class="num" style="cursor:pointer;" data-sort="${key}">${label}${arr}</th>`;
+  }
+  function render() {
+    const s = sortList(apply(hw21.gops));
+    let html = `<table><thead><tr>
+      <th style="cursor:pointer;" data-sort="gop">GOP${hfSortCol === "gop" ? (hfSortDir === "asc" ? " ▲" : " ▼") : ""}</th>
+      <th>Bezeichnung</th>${th("haeufigkeit", "Häufig.")}${th("wertEuro", "Wert €")}
+      ${th("gesamtbetrag", "Gesamt €")}${th("euroProFall", "€/Fall")}${th("euroProFallPG", "€/Fall PG")}
+      ${th("abweichung", "Abw. %")}${th("ansatzPraxen", "Verbr. %")}
+    </tr></thead><tbody>`;
+    s.forEach(g => {
+      const c = g.abweichung > 50 ? "var(--success)" : (g.abweichung < -50 ? "var(--rust)" : "");
+      html += `<tr><td><b>${g.gop}</b></td>
+        <td style="font-size:0.7rem;color:var(--warm-muted);">${HF_LABELS[g.gop] || ""}</td>
+        <td class="num">${fmt(g.haeufigkeit)}</td><td class="num">${g.wertEuro.toFixed(2)}</td>
+        <td class="num">${eur(g.gesamtbetrag)}</td><td class="num">${g.euroProFall.toFixed(2)}</td>
+        <td class="num">${g.euroProFallPG.toFixed(2)}</td>
+        <td class="num" style="color:${c};font-weight:${c ? '600' : '400'};">${g.abweichung > 0 ? "+" : ""}${g.abweichung.toFixed(1)}</td>
+        <td class="num">${g.ansatzPraxen.toFixed(1)}</td></tr>`;
+    });
+    html += `</tbody></table><div class="helper" style="margin-top:6px;">${s.length} von ${hw21.gops.length} GOPs angezeigt</div>`;
+    wrap.innerHTML = html;
+    wrap.querySelectorAll("th[data-sort]").forEach(th => {
+      th.onclick = () => {
+        if (hfSortCol === th.dataset.sort) hfSortDir = hfSortDir === "asc" ? "desc" : "asc";
+        else { hfSortCol = th.dataset.sort; hfSortDir = "desc"; }
+        render();
+      };
+    });
+  }
+  filter.oninput = render;
+  render();
+}
+
+function hfRenderTrendSelect(hw21) {
+  const sel = document.getElementById("hf-gop-select");
+  const helper = document.getElementById("hf-gop-trend-helper");
+  if (!hw21) { sel.innerHTML = ""; return; }
+  const codes = [...new Set(hfData.filter(d => d.type === "HW0021").flatMap(d => d.gops.map(g => g.gop)))].sort();
+  sel.innerHTML = codes.map(c => `<option value="${c}">${c}${HF_LABELS[c] ? ' — ' + HF_LABELS[c] : ''}</option>`).join("");
+  const top = [...hw21.gops].filter(g => g.haeufigkeit >= 10).sort((a, b) => Math.abs(b.abweichung) - Math.abs(a.abweichung))[0];
+  if (top) sel.value = top.gop;
+  function draw() {
+    const c = sel.value;
+    const qs = [...new Set(hfData.filter(d => d.type === "HW0021").map(d => d.quarter))].sort();
+    const haeuf = qs.map(q => hfData.find(x => x.type === "HW0021" && x.quarter === q)?.gops.find(x => x.gop === c)?.haeufigkeit ?? null);
+    const abw = qs.map(q => hfData.find(x => x.type === "HW0021" && x.quarter === q)?.gops.find(x => x.gop === c)?.abweichung ?? null);
+    helper.textContent = qs.length < 2 ? "Verlauf wird sichtbar sobald mehrere Quartale erfasst sind." : "";
+    drawLineChart("chart-hf-gop-trend", qs, [
+      { label: "Häufigkeit", data: haeuf, yAxisID: "y", color: "#924E7D" },
+      { label: "Abw. %", data: abw, yAxisID: "y1", color: "#B07030", dashed: true },
+    ], { dualY: true, yLabel: "Anzahl", y1Label: "Abw. %" });
+  }
+  sel.onchange = draw;
+  draw();
+}
+
+// ══════════════════════════════════════════════════════════════
+// PERSISTENCE (LOCALSTORAGE)
+// ══════════════════════════════════════════════════════════════
+function persistLocal() {
+  try {
+    localStorage.setItem(WSV_KEY, JSON.stringify(wsvData));
+    localStorage.setItem(HF_KEY,  JSON.stringify(hfData));
+    showLastSaved(new Date());
+  } catch (e) { console.warn("localStorage error:", e); }
+}
+function showLastSaved(d) {
+  const el = document.getElementById("lastSavedDisplay");
+  if (!el) return;
+  const s = d.toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric" })
+          + " " + d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
+  el.textContent = "Stand: " + s;
+}
+
+// ══════════════════════════════════════════════════════════════
+// GITHUB PAT + SYNC
+// ══════════════════════════════════════════════════════════════
+function getPat() { try { return localStorage.getItem(PAT_KEY) || ""; } catch (e) { return ""; } }
+
+function openPatModal() {
+  const inp = document.getElementById("patInput");
+  const pat = getPat();
+  if (inp) inp.value = pat ? "••••••••••••" : "";
+  document.getElementById("patStatus").textContent = "";
+  document.getElementById("patModal").classList.add("open");
+}
+function closePatModal() { document.getElementById("patModal").classList.remove("open"); }
+
+async function doSavePat() {
+  const inp = document.getElementById("patInput");
+  const val = inp.value.trim();
+  if (!val || val.startsWith("•")) { closePatModal(); return; }
+  const st = document.getElementById("patStatus");
+  st.textContent = "Verbinde…"; st.className = "modal-status";
+  try {
+    const r = await fetch(GH_API, {
+      headers: { "Authorization": `Bearer ${val}`, "Accept": "application/vnd.github+json" }
+    });
+    if (r.status === 404) {
+      try { localStorage.setItem(PAT_KEY, val); } catch (e) {}
+      st.textContent = "✓ Verbunden (data.json wird beim ersten Push angelegt)";
+      st.className = "modal-status status-ok";
+      updateGhBtn(true);
+      setTimeout(closePatModal, 1600);
+      return;
+    }
+    if (!r.ok) {
+      st.textContent = `Fehler HTTP ${r.status} — PAT ungültig oder kein Repo-Zugriff.`;
+      st.className = "modal-status status-err";
+      return;
+    }
+    try { localStorage.setItem(PAT_KEY, val); } catch (e) {}
+    st.textContent = "✓ Verbunden — lade Daten von GitHub…";
+    st.className = "modal-status status-ok";
+    updateGhBtn(true);
+    await loadFromGitHub();
+    setTimeout(closePatModal, 1200);
+  } catch (e) {
+    st.textContent = `Netzwerkfehler: ${e.message}`;
+    st.className = "modal-status status-err";
+  }
+}
+
+function doClearPat() {
+  try { localStorage.removeItem(PAT_KEY); } catch (e) {}
+  ghSha = null;
+  updateGhBtn(false);
+  closePatModal();
+}
+
+function updateGhBtn(connected) {
+  const b = document.getElementById("ghBtn");
+  if (!b) return;
+  b.className = connected ? "gh-config-btn connected" : "gh-config-btn";
+  b.textContent = connected ? "✓ GitHub" : "⚙ GitHub";
+}
+
+function b64encode(s) { return btoa(unescape(encodeURIComponent(s))); }
+function b64decode(s) { return decodeURIComponent(escape(atob(s.replace(/\n/g, "")))); }
+
+async function loadFromGitHub() {
+  const pat = getPat();
+  if (!pat) return;
+  try {
+    const r = await fetch(GH_API, {
+      headers: { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json" }
+    });
+    if (r.status === 404) { ghSha = null; return; }
+    if (!r.ok) return;
+    const resp = await r.json();
+    ghSha = resp.sha;
+    const remote = JSON.parse(b64decode(resp.content));
+    // Merge with local — keep the latest per quarter+type
+    if (remote.wsv) mergeQuartered(wsvData, remote.wsv, d => d.quarter);
+    if (remote.hf)  mergeQuartered(hfData,  remote.hf,  d => `${d.quarter}|${d.type}`);
+    persistLocal();
+    renderWsv(); renderHaeuf();
+  } catch (e) { console.warn("GitHub load:", e); }
+}
+
+function mergeQuartered(local, remote, keyFn) {
+  const map = new Map();
+  local.forEach(d => map.set(keyFn(d), d));
+  remote.forEach(d => {
+    const k = keyFn(d);
+    const cur = map.get(k);
+    if (!cur || (d.parsedAt && (!cur.parsedAt || d.parsedAt > cur.parsedAt))) map.set(k, d);
+  });
+  local.length = 0;
+  [...map.values()].sort((a, b) => (a.quarter || "").localeCompare(b.quarter || "")).forEach(d => local.push(d));
+}
+
+async function syncToGitHub() {
+  const pat = getPat();
+  if (!pat) return;
+  try {
+    if (ghSha === null) {
+      const r = await fetch(GH_API, {
+        headers: { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json" }
+      });
+      if (r.ok) { const j = await r.json(); ghSha = j.sha; }
+    }
+    const payload = { wsv: wsvData, hf: hfData, updatedAt: new Date().toISOString() };
+    const body = { message: `Update ${new Date().toISOString()}`, content: b64encode(JSON.stringify(payload, null, 2)) };
+    if (ghSha) body.sha = ghSha;
+    const r = await fetch(GH_API, {
+      method: "PUT",
+      headers: { "Authorization": `Bearer ${pat}`, "Accept": "application/vnd.github+json", "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (r.ok) { const j = await r.json(); ghSha = j.content.sha; }
+    else console.warn("GitHub sync failed", await r.text());
+  } catch (e) { console.warn("GitHub sync:", e); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════
+initWsvDrop();
+initHfDrop();
+if (getPat()) {
+  updateGhBtn(true);
+  loadFromGitHub().then(() => { renderWsv(); renderHaeuf(); });
+} else {
+  renderWsv();
+  renderHaeuf();
+}
+</script>
+
+</body>
+</html>
