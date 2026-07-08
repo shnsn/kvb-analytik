@@ -560,6 +560,13 @@ function eur(n) {
 }
 function parseGerNum(s) { if (s == null) return NaN; return parseFloat(String(s).replace(/\./g, "").replace(",", ".")); }
 function parseGerInt(s) { if (s == null) return NaN; return parseInt(String(s).replace(/\./g, "")); }
+// pdf.js liefert Zahlen manchmal fragmentiert ("24" ",29" → "24 ,29") — reassemblen.
+function normalizeNumberSpaces(text) {
+  return text
+    .replace(/(\d)\s+([,.])\s*(\d)/g, "$1$2$3")   // "24 ,29" / "24, 29" → "24,29"
+    .replace(/([,.])\s+(\d)/g, "$1$2")             // ", 29" → ",29"
+    .replace(/(-)\s+(\d)/g, "$1$2");               // "- 98,73" → "-98,73"
+}
 
 // ══════════════════════════════════════════════════════════════
 // ABKÜRZUNGS-WÖRTERBUCH (Tooltip on hover)
@@ -1390,7 +1397,7 @@ function hfFallzahlen(t) {
 }
 
 function parseHW0021(text) {
-  const norm = text.replace(/\s+/g, " ");
+  const norm = normalizeNumberSpaces(text.replace(/\s+/g, " "));
   const quarter = hfQuarter(norm);
   const bsnr = hfBsnr(norm);
   const datum = hfDatum(norm);
@@ -1447,7 +1454,7 @@ function parseHW0024(text) {
   // Zeilen behalten wir für die "Summe kurativ"-Erkennung (Fallback),
   // aber primär arbeiten wir auf dem collapse-normalisierten Text — das ist robust gegen
   // pdf.js-Zeilenumbrüche, wenn ein Label umbricht ("Ber. u. Betr." + "Grundleistungen").
-  const norm = text.replace(/\s+/g, " ");
+  const norm = normalizeNumberSpaces(text.replace(/\s+/g, " "));
   const quarter = hfQuarter(norm);
   const bsnr    = hfBsnr(norm);
   const datum   = hfDatum(norm);
@@ -1509,11 +1516,9 @@ function parseHW0024(text) {
     if (nums.length < 6) continue;
     const [gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz] = nums.slice(-6);
 
-    // Plausibilitätsnetze
-    if (!isFinite(abwProz) || Math.abs(abwProz) > 500) continue;
-    if (gesamt < praxisProFall * 10) continue;
-    // pgProFall und pggewProFall sollten in derselben Größenordnung liegen
-    if (pgProFall <= 0 || pggewProFall <= 0) continue;
+    // Plausibilitätsnetze — konservativ, nur klare Ausreißer verwerfen
+    if (!isFinite(abwProz)) continue;
+    if (Math.abs(abwProz) > 1000) continue; // 340% ist real möglich, > 1000% nicht
 
     lstgr.push({
       code: def.code, bezeichnung: HF_LSTGR[def.code] || def.label,
@@ -1535,7 +1540,7 @@ function parseHW0024(text) {
     const nums = [...kRest.slice(0, endPos).matchAll(/-?[\d.]+,\d{2}/g)].map(m => parseGerNum(m[0]));
     if (nums.length >= 6) {
       const [gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz] = nums.slice(-6);
-      if (isFinite(abwProz) && Math.abs(abwProz) < 500 && gesamt >= praxisProFall * 10) {
+      if (isFinite(abwProz) && Math.abs(abwProz) < 1000) {
         summeKurativ = { gesamt, praxisProFall, pgProFall, pggewProFall, abwEur, abwProz };
       }
     }
@@ -1573,6 +1578,12 @@ async function handleHfFiles(fileList) {
       else if (type === "HW0024") parsed = parseHW0024(text);
       else { results.push({ file: file.name, ok: false, msg: "Typ nicht erkannt" }); continue; }
       if (!parsed.quarter) { results.push({ file: file.name, ok: false, msg: "Quartal nicht erkannt" }); continue; }
+      const dataCount = parsed.type === "HW0021" ? parsed.gops.length : parsed.lstgr.length;
+      if (dataCount === 0) {
+        results.push({ file: file.name, ok: false,
+          msg: `${parsed.type} · ${parsed.quarter} — Kopfdaten erkannt, aber keine Datenzeilen extrahiert. PDF-Layout hat sich möglicherweise geändert. Bitte melden.` });
+        continue;
+      }
       const detail = parsed.type === "HW0021"
         ? `${parsed.gops.length} GOPs · ${parsed.lstgrGroups.length} Leistungsgruppen`
         : `${parsed.lstgr.length} LSTGR-Aggregate`;
